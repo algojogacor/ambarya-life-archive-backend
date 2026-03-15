@@ -10,7 +10,7 @@ type Action =
   | 'export.pdf'
   | 'auth.refresh' | 'auth.revoke';
 
-export const logActivity = (
+export const logActivity = async (
   userId: string | null,
   action: Action,
   entity?: string,
@@ -19,28 +19,28 @@ export const logActivity = (
   ip?: string
 ) => {
   try {
-    db.prepare(`
-      INSERT INTO activity_logs (id, user_id, action, entity, entity_id, meta, ip)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      uuidv4(),
-      userId,
-      action,
-      entity || null,
-      entityId || null,
-      JSON.stringify(meta || {}),
-      ip || null
-    );
+    await db.execute({
+      sql: `INSERT INTO activity_logs (id, user_id, action, entity, entity_id, meta, ip)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        uuidv4(),
+        userId,
+        action,
+        entity || null,
+        entityId || null,
+        JSON.stringify(meta || {}),
+        ip || null
+      ]
+    });
   } catch (err) {
     logger.error('Failed to log activity', { action, userId, err });
   }
 };
 
-export const getActivityLogs = (userId: string, limit: number = 50) => {
-  return db.prepare(`
-    SELECT * FROM activity_logs 
-    WHERE user_id = ? 
-    ORDER BY created_at DESC 
-    LIMIT ?
-  `).all(userId, limit);
+export const getActivityLogs = async (userId: string, limit: number = 50) => {
+  const result = await db.execute({
+    sql: `SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
+    args: [userId, limit]
+  });
+  return result.rows;
 };

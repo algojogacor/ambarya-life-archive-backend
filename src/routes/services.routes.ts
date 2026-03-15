@@ -4,6 +4,7 @@ import { getWeatherByCoords, getWeatherByCity } from '../services/weather.servic
 import { searchPlaces, reverseGeocode, getStaticMapUrl } from '../services/maps.service';
 import { searchTracks, getTrack } from '../services/spotify.service';
 import { chat, getDailyReflection, askAboutMemory } from '../services/ai.service';
+import { logActivity } from '../services/activity.service';
 import db from '../db/database';
 
 const router = Router();
@@ -79,12 +80,13 @@ router.post('/ai/chat', async (req: Request, res: Response) => {
   if (!message) { res.status(400).json({ error: 'Message wajib diisi' }); return; }
 
   try {
-    const recentEntries = db.prepare(`
-      SELECT * FROM entries WHERE user_id = ? 
-      ORDER BY created_at DESC LIMIT 10
-    `).all(userId) as any[];
+    const result = await db.execute({
+      sql: `SELECT * FROM entries WHERE user_id = ? ORDER BY created_at DESC LIMIT 10`,
+      args: [userId]
+    });
 
-    const reply = await chat(message, history || [], recentEntries);
+    const reply = await chat(message, history || [], result.rows);
+    await logActivity(userId, 'ai.chat');
     res.json({ reply });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Gagal menghubungi AI' });
@@ -96,18 +98,18 @@ router.get('/ai/daily-reflection', async (req: Request, res: Response) => {
 
   try {
     const today = new Date().toISOString().split('T')[0];
-    const entries = db.prepare(`
-      SELECT * FROM entries WHERE user_id = ? 
-      AND strftime('%Y-%m-%d', created_at) = ?
-      ORDER BY created_at ASC
-    `).all(userId, today) as any[];
+    const result = await db.execute({
+      sql: `SELECT * FROM entries WHERE user_id = ? AND strftime('%Y-%m-%d', created_at) = ? ORDER BY created_at ASC`,
+      args: [userId, today]
+    });
 
-    if (entries.length === 0) {
+    if (result.rows.length === 0) {
       res.status(404).json({ error: 'Belum ada entry hari ini' });
       return;
     }
 
-    const reflection = await getDailyReflection(entries);
+    const reflection = await getDailyReflection(result.rows);
+    await logActivity(userId, 'ai.reflection');
     res.json({ reflection });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Gagal generate refleksi' });
@@ -121,12 +123,12 @@ router.post('/ai/ask-memory', async (req: Request, res: Response) => {
   if (!question) { res.status(400).json({ error: 'Question wajib diisi' }); return; }
 
   try {
-    const entries = db.prepare(`
-      SELECT * FROM entries WHERE user_id = ? 
-      ORDER BY created_at DESC LIMIT 50
-    `).all(userId) as any[];
+    const result = await db.execute({
+      sql: `SELECT * FROM entries WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
+      args: [userId]
+    });
 
-    const answer = await askAboutMemory(question, entries);
+    const answer = await askAboutMemory(question, result.rows);
     res.json({ answer });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Gagal menjawab pertanyaan' });
