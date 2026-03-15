@@ -8,10 +8,17 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+
+# Install SEMUA dependencies dulu (termasuk devDeps untuk build)
+RUN npm ci
 
 COPY . .
+
+# Build TypeScript
 RUN npm run build
+
+# Hapus devDependencies setelah build
+RUN npm prune --omit=dev
 
 EXPOSE 3000
 CMD ["node", "dist/index.js"]
