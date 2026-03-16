@@ -1,70 +1,54 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
-dotenv.config();
 
-const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-
-// Client Credentials Flow (untuk search, tidak perlu login user)
-let cachedToken: string | null = null;
-let tokenExpiry: number = 0;
-
-const getAppToken = async (): Promise<string> => {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
-
-  const res = await axios.post(
-    'https://accounts.spotify.com/api/token',
-    'grant_type=client_credentials',
-    {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`,
-      }
-    }
-  );
-
-  cachedToken = res.data.access_token;
-  tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
-  return cachedToken!;
-};
+// iTunes Search API - gratis, tanpa API key
+const ITUNES_BASE = 'https://itunes.apple.com';
 
 export const searchTracks = async (query: string, limit: number = 10) => {
-  const token = await getAppToken();
-
-  const res = await axios.get('https://api.spotify.com/v1/search', {
-    headers: { Authorization: `Bearer ${token}` },
-    params: { q: query, type: 'track', limit, market: 'ID' }
+  const res = await axios.get(`${ITUNES_BASE}/search`, {
+    params: {
+      term: query,
+      media: 'music',
+      entity: 'song',
+      limit,
+      country: 'ID',
+      lang: 'id_ID',
+    }
   });
 
-  return res.data.tracks.items.map((t: any) => ({
-    id: t.id,
-    name: t.name,
-    artist: t.artists.map((a: any) => a.name).join(', '),
-    album: t.album.name,
-    albumArt: t.album.images[0]?.url || null,
-    previewUrl: t.preview_url,
-    spotifyUrl: t.external_urls.spotify,
-    durationMs: t.duration_ms,
+  return res.data.results.map((t: any) => ({
+    id: String(t.trackId),
+    name: t.trackName,
+    artist: t.artistName,
+    album: t.collectionName,
+    albumArt: t.artworkUrl100?.replace('100x100', '300x300') || null,
+    previewUrl: t.previewUrl || null,
+    itunesUrl: t.trackViewUrl || null,
+    durationMs: t.trackTimeMillis || 0,
+    genre: t.primaryGenreName || null,
+    releaseDate: t.releaseDate || null,
   }));
 };
 
 export const getTrack = async (trackId: string) => {
-  const token = await getAppToken();
-
-  const res = await axios.get(`https://api.spotify.com/v1/tracks/${trackId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: { market: 'ID' }
+  const res = await axios.get(`${ITUNES_BASE}/lookup`, {
+    params: { id: trackId }
   });
 
-  const t = res.data;
+  if (!res.data.results || res.data.results.length === 0) {
+    throw new Error('Track tidak ditemukan');
+  }
+
+  const t = res.data.results[0];
   return {
-    id: t.id,
-    name: t.name,
-    artist: t.artists.map((a: any) => a.name).join(', '),
-    album: t.album.name,
-    albumArt: t.album.images[0]?.url || null,
-    previewUrl: t.preview_url,
-    spotifyUrl: t.external_urls.spotify,
-    durationMs: t.duration_ms,
+    id: String(t.trackId),
+    name: t.trackName,
+    artist: t.artistName,
+    album: t.collectionName,
+    albumArt: t.artworkUrl100?.replace('100x100', '300x300') || null,
+    previewUrl: t.previewUrl || null,
+    itunesUrl: t.trackViewUrl || null,
+    durationMs: t.trackTimeMillis || 0,
+    genre: t.primaryGenreName || null,
+    releaseDate: t.releaseDate || null,
   };
 };
