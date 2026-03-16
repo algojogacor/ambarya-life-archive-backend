@@ -5,6 +5,7 @@ import { initDB } from './db/database';
 import authRoutes from './routes/auth.routes';
 import entryRoutes from './routes/entry.routes';
 import extraRoutes from './routes/extra.routes';
+import waRoutes from './routes/wa.routes';
 import servicesRoutes from './routes/services.routes';
 import { initCronJobs } from './services/cron.service';
 import logger from './services/logger.service';
@@ -29,6 +30,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/entries', entryRoutes);
 app.use('/api', extraRoutes);
+app.use('/api', waRoutes);
 app.use('/api', servicesRoutes);
 
 const start = async () => {
