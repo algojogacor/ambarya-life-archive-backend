@@ -30,7 +30,7 @@ export const getEntries = async (req: Request, res: Response): Promise<void> => 
   let entries = result.rows.map(parseEntry);
 
   if (tag) {
-    entries = entries.filter(e => e.tags.includes(tag));
+    entries = entries.filter((e: any) => e.tags.includes(tag));
   }
 
   res.json({ entries });
@@ -59,7 +59,9 @@ export const createEntry = async (req: Request, res: Response): Promise<void> =>
     title, content, mood, mood_label,
     weather, location_text, location_lat, location_lng,
     tags, is_private, is_time_capsule, unlock_at,
-    chapter_id, era_id
+    chapter_id, era_id,
+    music_title, music_artist, music_album_art, music_preview_url, music_itunes_url,
+    step_count, energy_level, sleep_hours,
   } = req.body;
 
   const id = uuidv4();
@@ -69,8 +71,10 @@ export const createEntry = async (req: Request, res: Response): Promise<void> =>
       id, user_id, title, content, mood, mood_label,
       weather, location_text, location_lat, location_lng,
       tags, media, is_private, is_time_capsule, unlock_at,
-      chapter_id, era_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      chapter_id, era_id,
+      music_title, music_artist, music_album_art, music_preview_url, music_itunes_url,
+      step_count, energy_level, sleep_hours
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id, userId, title || null, content || null,
       mood || null, mood_label || null,
@@ -81,7 +85,15 @@ export const createEntry = async (req: Request, res: Response): Promise<void> =>
       is_time_capsule ? 1 : 0,
       unlock_at || null,
       chapter_id || null,
-      era_id || null
+      era_id || null,
+      music_title || null,
+      music_artist || null,
+      music_album_art || null,
+      music_preview_url || null,
+      music_itunes_url || null,
+      step_count || null,
+      energy_level || null,
+      sleep_hours || null,
     ]
   });
 
@@ -186,7 +198,11 @@ export const updateEntry = async (req: Request, res: Response): Promise<void> =>
     ]
   });
 
-  const { title, content, mood, mood_label, weather, location_text, tags, chapter_id, era_id } = req.body;
+  const {
+    title, content, mood, mood_label, weather, location_text, tags, chapter_id, era_id,
+    music_title, music_artist, music_album_art, music_preview_url, music_itunes_url,
+    step_count, energy_level, sleep_hours,
+  } = req.body;
 
   await db.execute({
     sql: `UPDATE entries SET
@@ -199,13 +215,25 @@ export const updateEntry = async (req: Request, res: Response): Promise<void> =>
       tags = COALESCE(?, tags),
       chapter_id = COALESCE(?, chapter_id),
       era_id = COALESCE(?, era_id),
+      music_title = COALESCE(?, music_title),
+      music_artist = COALESCE(?, music_artist),
+      music_album_art = COALESCE(?, music_album_art),
+      music_preview_url = COALESCE(?, music_preview_url),
+      music_itunes_url = COALESCE(?, music_itunes_url),
+      step_count = COALESCE(?, step_count),
+      energy_level = COALESCE(?, energy_level),
+      sleep_hours = COALESCE(?, sleep_hours),
       updated_at = datetime('now')
     WHERE id = ? AND user_id = ?`,
     args: [
       title || null, content || null, mood || null, mood_label || null,
       weather || null, location_text || null,
       tags ? JSON.stringify(tags) : null,
-      chapter_id || null, era_id || null, id, userId
+      chapter_id || null, era_id || null,
+      music_title || null, music_artist || null,
+      music_album_art || null, music_preview_url || null, music_itunes_url || null,
+      step_count || null, energy_level || null, sleep_hours || null,
+      id, userId
     ]
   });
 
