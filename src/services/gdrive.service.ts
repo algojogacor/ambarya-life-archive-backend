@@ -1,11 +1,14 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
-import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
+const credentials = JSON.parse(
+  Buffer.from(process.env.GDRIVE_KEY_BASE64 || '', 'base64').toString('utf-8')
+);
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: path.resolve(process.env.GDRIVE_KEY_PATH || ''),
+  credentials,
   scopes: ['https://www.googleapis.com/auth/drive'],
 });
 
