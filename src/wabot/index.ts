@@ -5,11 +5,11 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
-import * as qrcode from 'qrcode-terminal';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import P from 'pino'; // <-- Import pino ditambahkan di sini
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -192,19 +192,37 @@ const startBot = async () => {
     version,
     auth: {
       creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, console as any),
+      keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }) as any),
     },
     printQRInTerminal: false,
-    logger: { level: 'silent' } as any,
+    logger: P({ level: 'silent' }) as any,
   });
 
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log('\n📱 Scan QR code ini dengan WhatsApp:\n');
-      qrcode.generate(qr, { small: true });
+  // Pairing code instead of QR
+  if (!sock.authState.creds.registered) {
+    const phoneNumber = process.env.BOT_PHONE_NUMBER || '';
+    if (!phoneNumber) {
+      console.log('❌ Set BOT_PHONE_NUMBER di .env (format: 628xxx)');
+      process.exit(1);
     }
+
+    // Tunggu sampai baileys benar-benar siap
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    try {
+      const code = await sock.requestPairingCode(phoneNumber);
+      console.log(`\n📱 Pairing Code untuk nomor ${phoneNumber}:\n`);
+      console.log(`   ╔══════════════╗`);
+      console.log(`   ║  ${code}  ║`);
+      console.log(`   ╚══════════════╝`);
+      console.log(`\nBuka WA → Linked Devices → Link with phone number → masukkan kode di atas\n`);
+    } catch (err) {
+      console.error('❌ Gagal mendapatkan pairing code:', err);
+    }
+  }
+
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect } = update;
 
     if (connection === 'close') {
       const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
