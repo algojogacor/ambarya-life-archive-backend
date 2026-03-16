@@ -8,6 +8,7 @@ import extraRoutes from './routes/extra.routes';
 import waRoutes from './routes/wa.routes';
 import servicesRoutes from './routes/services.routes';
 import { initCronJobs } from './services/cron.service';
+import { runMigrations } from './db/migrate';
 import logger from './services/logger.service';
 
 dotenv.config();
@@ -36,8 +37,9 @@ app.use('/api', servicesRoutes);
 const start = async () => {
   try {
     await initDB();
+    await runMigrations();
     app.listen(PORT, () => {
-      logger.info(`🗂️  Ambarya's Life Archive backend running on port ${PORT}`);
+      logger.info(`🗂️  Ambarya's Life Archive backend running on port ${PORT}`);
       initCronJobs();
     });
   } catch (err) {
