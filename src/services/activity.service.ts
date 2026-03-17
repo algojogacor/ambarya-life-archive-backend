@@ -15,7 +15,9 @@ type Action =
   | 'social.follow' | 'social.unfollow'
   | 'social.post' | 'social.post_delete'
   | 'social.comment' | 'social.comment_delete'
-  | 'social.react';
+  | 'social.react'
+  // ── Profile ──
+  | 'profile.update' | 'profile.avatar_update';
 
 export const logActivity = async (
   userId: string | null,
