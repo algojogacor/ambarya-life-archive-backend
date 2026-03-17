@@ -301,11 +301,9 @@ export const uploadPostMedia = async (req: Request, res: Response): Promise<void
 
   const existingMedia = JSON.parse((post.media as string) || '[]');
   const newMedia = [...existingMedia, ...uploaded];
-  const now = new Date().toISOString();
-
   await db.execute({
-    sql: 'UPDATE feed_posts SET media = ?, updated_at = ? WHERE id = ?',
-    args: [a(JSON.stringify(newMedia)), a(now), a(id)]
+    sql: 'UPDATE feed_posts SET media = ? WHERE id = ?',
+    args: [a(JSON.stringify(newMedia)), a(id)]
   });
 
   res.json({ message: 'Media berhasil diupload!', media: newMedia });

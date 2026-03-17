@@ -97,6 +97,9 @@ export const runMigrations = async () => {
       FOREIGN KEY (actor_id) REFERENCES users(id)
     )`,
 
+    // ── Fix: tambah updated_at ke feed_posts ─────────────────────────────────
+    `ALTER TABLE feed_posts ADD COLUMN updated_at TEXT`,
+
     // ── Phase 3: Bot System ───────────────────────────────────────────────────
 
     // Konfigurasi bot
