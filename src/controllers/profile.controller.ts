@@ -30,7 +30,7 @@ const str = (v: unknown): string => {
 /**
  * PUT /social/profile
  * Body: { display_name?, bio? }
- * Username tidak bisa diubah di sini — pakai createOrUpdateProfile.
+ * Upsert: buat profil kalau belum ada, update kalau sudah ada.
  */
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   const userId = str((req as any).user.id);
@@ -42,21 +42,30 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   });
 
   if (existing.rows.length === 0) {
-    res.status(404).json({ error: 'Profil belum dibuat. Setup profil terlebih dahulu.' });
-    return;
+    // ✅ Profil belum ada → buat dulu dengan data yang ada
+    await db.execute({
+      sql: `INSERT INTO social_profiles (user_id, display_name, bio)
+            VALUES (?, ?, ?)`,
+      args: [
+        a(userId),
+        a(display_name?.trim() || null),
+        a(bio?.trim()          || null),
+      ],
+    });
+  } else {
+    // ✅ Profil sudah ada → update
+    await db.execute({
+      sql: `UPDATE social_profiles
+            SET display_name = ?,
+                bio          = ?
+            WHERE user_id = ?`,
+      args: [
+        a(display_name?.trim() || null),
+        a(bio?.trim()          || null),
+        a(userId),
+      ],
+    });
   }
-
-  await db.execute({
-    sql: `UPDATE social_profiles
-          SET display_name = ?,
-              bio          = ?
-          WHERE user_id = ?`,
-    args: [
-      a(display_name?.trim() || null),
-      a(bio?.trim()          || null),
-      a(userId),
-    ],
-  });
 
   await logActivity(userId, 'profile.update', 'social_profile', userId);
 
