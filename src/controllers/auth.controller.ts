@@ -7,7 +7,7 @@ import { logActivity } from '../services/activity.service';
 import logger from '../services/logger.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
-const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_EXPIRY = '7d';
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 
 const generateTokens = async (userId: string, email: string) => {
