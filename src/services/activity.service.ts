@@ -1,3 +1,5 @@
+// backend/src/services/activity.service.ts
+
 import db from '../db/database';
 import { v4 as uuidv4 } from 'uuid';
 import logger from './logger.service';
@@ -8,7 +10,12 @@ type Action =
   | 'media.upload' | 'media.upload_failed'
   | 'ai.chat' | 'ai.reflection'
   | 'export.pdf'
-  | 'auth.refresh' | 'auth.revoke';
+  | 'auth.refresh' | 'auth.revoke'
+  // ── Social ──
+  | 'social.follow' | 'social.unfollow'
+  | 'social.post' | 'social.post_delete'
+  | 'social.comment' | 'social.comment_delete'
+  | 'social.react';
 
 export const logActivity = async (
   userId: string | null,
