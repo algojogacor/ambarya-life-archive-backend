@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db/database';
-import { uploadFile, deleteFile } from '../services/gdrive.service';
+import { uploadToCloudinary } from '../services/cloudinary.service';
 import bcrypt from 'bcryptjs';
 import { compressImage } from '../services/compress.service';
 import { logActivity } from '../services/activity.service';
@@ -138,7 +138,7 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
       const { buffer, mimeType } = await compressImage(file.buffer, file.mimetype);
       const ext = mimeType === 'image/webp' ? 'webp' : file.originalname.split('.').pop();
       const filename = `${uuidv4()}_${file.originalname.replace(/\.[^.]+$/, '')}.${ext}`;
-      const { fileId, webViewLink } = await uploadFile(buffer, filename, mimeType, subfolder);
+      const { fileId, webViewLink } = await uploadToCloudinary(req.file.buffer, 'photos');
 
       uploaded.push({
         fileId, url: webViewLink, type: subfolder,
