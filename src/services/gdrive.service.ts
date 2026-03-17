@@ -1,11 +1,27 @@
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 import dotenv from 'dotenv';
+import fs from 'fs';
 dotenv.config();
 
-const credentials = JSON.parse(
-  Buffer.from(process.env.GDRIVE_KEY_BASE64 || '', 'base64').toString('utf-8')
-);
+let credentials;
+
+try {
+  // 1. Coba baca dari file path lokal terlebih dahulu
+  if (process.env.GDRIVE_KEY_PATH && fs.existsSync(process.env.GDRIVE_KEY_PATH)) {
+    credentials = JSON.parse(fs.readFileSync(process.env.GDRIVE_KEY_PATH, 'utf-8'));
+  } 
+  // 2. Kalau path tidak ada (misal di Koyeb), baru baca dari Base64
+  else if (process.env.GDRIVE_KEY_BASE64) {
+    credentials = JSON.parse(
+      Buffer.from(process.env.GDRIVE_KEY_BASE64, 'base64').toString('utf-8')
+    );
+  } else {
+    throw new Error("Kredensial Google Drive tidak ditemukan di .env!");
+  }
+} catch (error) {
+  console.error("Gagal membaca kredensial GDrive:", error);
+}
 
 const auth = new google.auth.GoogleAuth({
   credentials,
@@ -29,6 +45,9 @@ export const uploadFile = async (
     const existing = await drive.files.list({
       q: `name='${subfolder}' and '${FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: 'files(id)',
+      // Tambahkan ini agar bisa membaca folder yang dibagikan
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
 
     if (existing.data.files && existing.data.files.length > 0) {
@@ -41,6 +60,7 @@ export const uploadFile = async (
           parents: [FOLDER_ID],
         },
         fields: 'id',
+        supportsAllDrives: true, // Tambahkan ini
       });
       parentId = folder.data.id!;
     }
@@ -58,6 +78,7 @@ export const uploadFile = async (
       body: stream,
     },
     fields: 'id, webViewLink',
+    supportsAllDrives: true, // Tambahkan ini
   });
 
   // Set file readable by anyone with link
@@ -67,6 +88,7 @@ export const uploadFile = async (
       role: 'reader',
       type: 'anyone',
     },
+    supportsAllDrives: true, // Tambahkan ini
   });
 
   return {
@@ -76,12 +98,19 @@ export const uploadFile = async (
 };
 
 export const deleteFile = async (fileId: string): Promise<void> => {
-  await drive.files.delete({ fileId });
+  await drive.files.delete({ 
+    fileId,
+    supportsAllDrives: true, // Tambahkan ini
+  });
 };
 
 export const getFileStream = async (fileId: string) => {
   const response = await drive.files.get(
-    { fileId, alt: 'media' },
+    { 
+      fileId, 
+      alt: 'media',
+      supportsAllDrives: true, // Tambahkan ini
+    },
     { responseType: 'stream' }
   );
   return response.data;
