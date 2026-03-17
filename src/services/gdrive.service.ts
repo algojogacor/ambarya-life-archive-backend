@@ -7,11 +7,9 @@ dotenv.config();
 let credentials;
 
 try {
-  // 1. Coba baca dari file path lokal terlebih dahulu
   if (process.env.GDRIVE_KEY_PATH && fs.existsSync(process.env.GDRIVE_KEY_PATH)) {
     credentials = JSON.parse(fs.readFileSync(process.env.GDRIVE_KEY_PATH, 'utf-8'));
   } 
-  // 2. Kalau path tidak ada (misal di Koyeb), baru baca dari Base64
   else if (process.env.GDRIVE_KEY_BASE64) {
     credentials = JSON.parse(
       Buffer.from(process.env.GDRIVE_KEY_BASE64, 'base64').toString('utf-8')
@@ -40,12 +38,10 @@ export const uploadFile = async (
 ): Promise<{ fileId: string; webViewLink: string }> => {
   let parentId = FOLDER_ID;
 
-  // Buat subfolder kalau belum ada (misal: "photos", "voices")
   if (subfolder) {
     const existing = await drive.files.list({
       q: `name='${subfolder}' and '${FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: 'files(id)',
-      // Tambahkan ini agar bisa membaca folder yang dibagikan
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     });
@@ -60,7 +56,7 @@ export const uploadFile = async (
           parents: [FOLDER_ID],
         },
         fields: 'id',
-        supportsAllDrives: true, // Tambahkan ini
+        supportsAllDrives: true,
       });
       parentId = folder.data.id!;
     }
@@ -68,6 +64,7 @@ export const uploadFile = async (
 
   const stream = Readable.from(buffer);
 
+  // PERBAIKAN DI SINI:
   const response = await drive.files.create({
     requestBody: {
       name: filename,
@@ -77,18 +74,20 @@ export const uploadFile = async (
       mimeType,
       body: stream,
     },
-    fields: 'id, webViewLink',
-    supportsAllDrives: true, // Tambahkan ini
-  });
+    // Menambahkan fields webContentLink jika suatu saat butuh direct download
+    fields: 'id, webViewLink, webContentLink', 
+    supportsAllDrives: true,
+    // Paksa penggunaan kuota folder parent (jika didukung oleh tipe akun)
+    ignoreDefaultVisibility: true, 
+  } as any); // Gunakan 'as any' jika TS mengeluh soal properti tambahan
 
-  // Set file readable by anyone with link
   await drive.permissions.create({
     fileId: response.data.id!,
     requestBody: {
       role: 'reader',
       type: 'anyone',
     },
-    supportsAllDrives: true, // Tambahkan ini
+    supportsAllDrives: true,
   });
 
   return {
@@ -100,7 +99,7 @@ export const uploadFile = async (
 export const deleteFile = async (fileId: string): Promise<void> => {
   await drive.files.delete({ 
     fileId,
-    supportsAllDrives: true, // Tambahkan ini
+    supportsAllDrives: true,
   });
 };
 
@@ -109,7 +108,7 @@ export const getFileStream = async (fileId: string) => {
     { 
       fileId, 
       alt: 'media',
-      supportsAllDrives: true, // Tambahkan ini
+      supportsAllDrives: true,
     },
     { responseType: 'stream' }
   );
