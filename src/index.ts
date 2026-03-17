@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.routes';
 import entryRoutes from './routes/entry.routes';
 import extraRoutes from './routes/extra.routes';
 import waRoutes from './routes/wa.routes';
+import socialRoutes from './routes/social.routes';
 import servicesRoutes from './routes/services.routes';
 import { initCronJobs } from './services/cron.service';
 import { runMigrations } from './db/migrate';
@@ -28,8 +29,21 @@ app.get('/', (req, res) => {
   });
 });
 
+// ─── APP VERSION CHECK ───────────────────────────────────────────────────────
+// Update 'latest' dan 'downloadUrl' setiap kali ada versi baru
+app.get('/api/app/version', (req, res) => {
+  res.json({
+    latest: process.env.APP_VERSION || '1.0.0',
+    download_url: process.env.APP_DOWNLOAD_URL || '',
+    force: false,        // true = user WAJIB update, tidak bisa skip
+    changelog: process.env.APP_CHANGELOG || 'Bug fixes and improvements',
+  });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use('/api/auth', authRoutes);
 app.use('/api/entries', entryRoutes);
+app.use('/api/social', socialRoutes);
 app.use('/api', extraRoutes);
 app.use('/api', waRoutes);
 app.use('/api', servicesRoutes);
@@ -39,7 +53,7 @@ const start = async () => {
     await initDB();
     await runMigrations();
     app.listen(PORT, () => {
-      logger.info(`🗂️  Ambarya's Life Archive backend running on port ${PORT}`);
+      logger.info(`🗂️  Ambarya's Life Archive backend running on port ${PORT}`);
       initCronJobs();
     });
   } catch (err) {
