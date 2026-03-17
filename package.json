@@ -4,12 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "bot": "ts-node src/wabot/index.ts",
-    "bot:prod": "node dist/wabot/index.js"
-  },
+  "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+  "build": "tsc --build --clean && tsc",
+  "start": "node dist/index.js",
+  "bot": "ts-node src/wabot/index.ts",
+  "bot:prod": "node dist/wabot/index.js"
+},
   "keywords": [],
   "author": "",
   "license": "ISC",
