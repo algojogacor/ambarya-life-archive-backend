@@ -65,23 +65,38 @@ const extractImage = (itemContent: string): string | undefined => {
   return undefined;
 };
 
+// Bersihkan HTML tags dan entities secara menyeluruh
+const stripHtml = (html: string): string => {
+  return html
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1') // unwrap CDATA
+    .replace(/<[^>]+>/g, ' ')                      // hapus semua HTML tags
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#\d+;/g, '')
+    .replace(/&[a-z]+;/g, ' ')
+    .replace(/\s{2,}/g, ' ')                       // multiple spaces jadi satu
+    .trim();
+};
+
 const parseRSS = (xml: string): { title: string; link: string; description: string; imageUrl?: string }[] => {
   const items: { title: string; link: string; description: string; imageUrl?: string }[] = [];
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   let match;
 
-  // Cek gambar di level channel (logo RSS)
-  const channelImage = xml.match(/<image>[\s\S]*?<url>(.*?)<\/url>/)?.[1];
-
   while ((match = itemRegex.exec(xml)) !== null) {
     const itemContent = match[1];
-    const title = itemContent.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/s)?.[1]
-      ?.replace(/<[^>]+>/g, '')?.trim() || '';
-    const link = itemContent.match(/<link>(.*?)<\/link>/)?.[1]?.trim() || '';
-    const description = itemContent.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/s)?.[1]
-      ?.replace(/<[^>]+>/g, '')?.replace(/&[a-z]+;/g, ' ')?.trim()?.substring(0, 280) || '';
 
-    // Ekstrak gambar dari item
+    const titleRaw = itemContent.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '';
+    const title = stripHtml(titleRaw);
+
+    const link = itemContent.match(/<link>(.*?)<\/link>/)?.[1]?.trim() || '';
+
+    const descRaw = itemContent.match(/<description>([\s\S]*?)<\/description>/)?.[1] || '';
+    const description = stripHtml(descRaw).substring(0, 280);
+
     const imageUrl = extractImage(itemContent);
 
     if (title) items.push({ title, link, description, imageUrl });
