@@ -1,12 +1,22 @@
 // backend/src/services/bot.service.ts
 
 import { v4 as uuidv4 } from 'uuid';
+import { v2 as cloudinary } from 'cloudinary';
+import axios from 'axios';
 import type { InValue } from '@libsql/client';
 import db from '../db/database';
 import { fetchContentByTopic } from './scraper.service';
 import logger from './logger.service';
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ═══ CLOUDINARY SETUP ═══════════════════════════════════════════════════════
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// ═══ HELPERS ════════════════════════════════════════════════════════════════
 
 const a = (v: unknown): InValue => {
   if (v === null || v === undefined) return null;
@@ -30,7 +40,57 @@ const randInt = (min: number, max: number) =>
 const randomDelay = (minMs: number, maxMs: number) =>
   new Promise(resolve => setTimeout(resolve, randInt(minMs, maxMs)));
 
-// Komentar generik yang natural
+// ═══ IMAGE UPLOAD TO CLOUDINARY ════════════════════════════════════════════
+
+const uploadImageToCloudinary = async (imageUrl: string, botName: string): Promise<string | null> => {
+  try {
+    // Validasi URL gambar
+    if (!imageUrl || !imageUrl.match(/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i)) {
+      return null;
+    }
+
+    // Check jika gambar accessible dengan timeout pendek
+    const headResponse = await axios.head(imageUrl, { 
+      timeout: 5000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AmbaryaBot/1.0)' }
+    });
+    
+    if (!headResponse.headers['content-type']?.startsWith('image/')) {
+      return null;
+    }
+
+    // Upload ke Cloudinary
+    const result = await cloudinary.uploader.upload(imageUrl, {
+      folder: `ambarya-bot/${botName.toLowerCase().replace(/\s+/g, '-')}`,
+      transformation: [
+        { width: 800, height: 600, crop: 'limit' },
+        { quality: 'auto:good' },
+        { format: 'jpg' }
+      ],
+      resource_type: 'image',
+      timeout: 15000 // 15 detik timeout
+    });
+
+    logger.info('Bot: Image uploaded to Cloudinary', { 
+      bot: botName,
+      originalUrl: imageUrl.substring(0, 50) + '...',
+      cloudinaryUrl: result.secure_url 
+    });
+
+    return result.secure_url;
+
+  } catch (error: any) {
+    logger.warn('Bot: Failed to upload image', { 
+      bot: botName,
+      imageUrl: imageUrl.substring(0, 50) + '...',
+      error: error.message.substring(0, 100)
+    });
+    return null;
+  }
+};
+
+// ═══ COMMENTS ═══════════════════════════════════════════════════════════════
+
 const GENERIC_COMMENTS = [
   'Bagus banget ini! 👍',
   'Relate banget sama ini...',
@@ -41,7 +101,7 @@ const GENERIC_COMMENTS = [
   'Inspiratif sekali ✨',
   'Semangat terus ya!',
   'Keren banget!',
-  'Ini yang aku butuhkan hari ini 🙏',
+  'Ini yang aku butuhkan hari ini 😊',
   'Thanks for sharing',
   'So true!',
   'Noted! 📝',
@@ -57,7 +117,7 @@ const GENERIC_COMMENTS = [
 const getRandomComment = () =>
   GENERIC_COMMENTS[Math.floor(Math.random() * GENERIC_COMMENTS.length)];
 
-// ─── BOT TEMPLATES ────────────────────────────────────────────────────────────
+// ═══ BOT TEMPLATES ═════════════════════════════════════════════════════════
 
 const BOT_TEMPLATES = [
   {
@@ -79,7 +139,7 @@ const BOT_TEMPLATES = [
   {
     name: 'Dakwah Islam',
     username: 'dakwah_islam',
-    bio: 'Berbagi hikmah dan ilmu Islam 🌙🤲',
+    bio: 'Berbagi hikmah dan ilmu Islam 🕌🤲',
     topics: ['islamic', 'dakwah'],
     postFreqMin: 2, postFreqMax: 4,
     interactFreqMin: 3, interactFreqMax: 10,
@@ -87,7 +147,7 @@ const BOT_TEMPLATES = [
   {
     name: 'Tech News',
     username: 'tech_news_id',
-    bio: 'Berita teknologi terkini dari seluruh dunia 💻🚀',
+    bio: 'Berita teknologi terkini dari seluruh dunia 💻🌐',
     topics: ['tech'],
     postFreqMin: 1, postFreqMax: 3,
     interactFreqMin: 4, interactFreqMax: 12,
@@ -110,7 +170,7 @@ const BOT_TEMPLATES = [
   },
 ];
 
-// ─── INIT BOTS ────────────────────────────────────────────────────────────────
+// ═══ INIT BOTS ══════════════════════════════════════════════════════════════
 
 export const initBots = async (): Promise<void> => {
   logger.info('Bot: Initializing bots...');
@@ -141,7 +201,7 @@ export const initBots = async (): Promise<void> => {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           a(uuidv4()), a(botUserId), a(template.name), a(template.bio),
-          a(JSON.stringify(template.topics)), a(JSON.stringify(['rss', 'api'])),
+          a(JSON.stringify(template.topics)), a(JSON.stringify(['rss', 'groq'])),
           a(template.postFreqMin), a(template.postFreqMax),
           a(template.interactFreqMin), a(template.interactFreqMax),
         ]
@@ -156,7 +216,7 @@ export const initBots = async (): Promise<void> => {
   logger.info('Bot: Init complete');
 };
 
-// ─── BOT POST ─────────────────────────────────────────────────────────────────
+// ═══ BOT POST WITH CLOUDINARY INTEGRATION ══════════════════════════════════
 
 export const runBotPosts = async (): Promise<void> => {
   logger.info('Bot: Running bot posts...');
@@ -170,32 +230,50 @@ export const runBotPosts = async (): Promise<void> => {
 
   for (const bot of bots.rows as any[]) {
     try {
-      // ✅ RANDOM: setiap bot punya probabilitas berbeda berdasarkan freq setting
-      // Bot dengan freq tinggi lebih sering aktif
-      const activationChance = bot.post_frequency_max / 10; // max 10 = 100% chance
+      // ⚡ RANDOM: setiap bot punya probabilitas berbeda berdasarkan freq setting
+      const activationChance = bot.post_frequency_max / 10;
       const shouldPost = Math.random() < activationChance;
       if (!shouldPost) continue;
 
-      // ✅ RANDOM: jumlah post berbeda tiap run
+      // ⚡ RANDOM: jumlah post berbeda tiap run
       const postCount = randInt(1, Math.min(bot.post_frequency_max, 3));
       const topics: string[] = JSON.parse(str(bot.topics) || '["quotes"]');
 
       for (let i = 0; i < postCount; i++) {
-        // ✅ RANDOM: delay antar post berbeda-beda (30 detik - 5 menit)
+        // ⚡ RANDOM: delay antar post berbeda-beda (30 detik - 5 menit)
         await randomDelay(30_000, 300_000);
 
         const topic = topics[Math.floor(Math.random() * topics.length)];
+        
+        logger.info('Bot: Fetching content', { bot: bot.name, topic });
         const content = await fetchContentByTopic(topic);
-        if (!content) continue;
+        if (!content) {
+          logger.warn('Bot: No content fetched', { bot: bot.name, topic });
+          continue;
+        }
 
         const postId = uuidv4();
         const now = new Date().toISOString();
 
-        // ✅ Sertakan gambar jika ada dari scraper
-        const mediaJson = content.imageUrl
-          ? JSON.stringify([{ url: content.imageUrl, type: 'image', name: 'thumbnail' }])
-          : '[]';
+        // ✨ CLOUDINARY INTEGRATION: Upload gambar jika ada
+        let finalImageUrl = null;
+        let mediaJson = '[]';
 
+        if (content.imageUrl) {
+          logger.info('Bot: Uploading image to Cloudinary', { bot: bot.name });
+          finalImageUrl = await uploadImageToCloudinary(content.imageUrl, bot.name);
+          
+          if (finalImageUrl) {
+            mediaJson = JSON.stringify([{ 
+              url: finalImageUrl, 
+              type: 'image', 
+              name: 'article_image',
+              source: 'cloudinary'
+            }]);
+          }
+        }
+
+        // Save post dengan gambar yang sudah di-upload ke Cloudinary
         await db.execute({
           sql: `INSERT INTO feed_posts (id, user_id, content, media, visibility, is_bot_post, source_url, source_name, created_at)
                 VALUES (?, ?, ?, ?, 'public', 1, ?, ?, ?)`,
@@ -209,20 +287,29 @@ export const runBotPosts = async (): Promise<void> => {
           ]
         });
 
-        logger.info('Bot: Posted', { bot: bot.name, topic, hasImage: !!content.imageUrl });
+        logger.info('Bot: Posted successfully', { 
+          bot: bot.name, 
+          topic, 
+          hasImage: !!finalImageUrl,
+          hasSourceUrl: !!content.sourceUrl,
+          contentPreview: content.content.substring(0, 80) + '...'
+        });
       }
 
       await db.execute({
         sql: 'UPDATE bots SET last_post_at = ? WHERE id = ?',
         args: [a(new Date().toISOString()), a(str(bot.id))]
       });
-    } catch (err) {
-      logger.error('Bot: Post failed', { bot: bot.name, err });
+
+    } catch (err: any) {
+      logger.error('Bot: Post failed', { bot: bot.name, error: err.message });
     }
   }
+
+  logger.info('Bot: Post run completed');
 };
 
-// ─── BOT INTERACT (like & comment saja, NO follow) ───────────────────────────
+// ═══ BOT INTERACT (like & comment saja, NO follow) ═════════════════════════
 
 export const runBotInteractions = async (): Promise<void> => {
   logger.info('Bot: Running interactions...');
@@ -234,25 +321,28 @@ export const runBotInteractions = async (): Promise<void> => {
     args: []
   });
 
-  // Ambil post publik terbaru dari user manusia
+  // Ambil post publik terbaru dari user manusia (bukan bot)
   const recentPosts = await db.execute({
     sql: `SELECT fp.id, fp.user_id FROM feed_posts fp
           JOIN social_profiles sp ON sp.user_id = fp.user_id
-          WHERE fp.visibility = 'public' AND sp.is_bot = 0
+          WHERE fp.visibility = 'public' AND sp.is_bot = 0 AND fp.is_bot_post = 0
           ORDER BY fp.created_at DESC LIMIT 30`,
     args: []
   });
 
-  if (recentPosts.rows.length === 0) return;
+  if (recentPosts.rows.length === 0) {
+    logger.info('Bot: No recent human posts to interact with');
+    return;
+  }
 
   for (const bot of bots.rows as any[]) {
     try {
-      // ✅ RANDOM: probabilitas interaksi berbeda per bot
+      // ⚡ RANDOM: probabilitas interaksi berbeda per bot
       const activationChance = bot.interact_frequency_max / 25;
       const shouldInteract = Math.random() < Math.min(activationChance, 0.7);
       if (!shouldInteract) continue;
 
-      // ✅ RANDOM: jumlah interaksi berbeda tiap run
+      // ⚡ RANDOM: jumlah interaksi berbeda tiap run
       const interactCount = randInt(
         Math.ceil(bot.interact_frequency_min / 2),
         Math.min(bot.interact_frequency_max, 8)
@@ -262,17 +352,17 @@ export const runBotInteractions = async (): Promise<void> => {
       const targetPosts = shuffled.slice(0, Math.min(interactCount, shuffled.length));
 
       for (const post of targetPosts as any[]) {
-        // ✅ RANDOM: delay antar interaksi (10 detik - 2 menit)
+        // ⚡ RANDOM: delay antar interaksi (10 detik - 2 menit)
         await randomDelay(10_000, 120_000);
 
-        // ✅ Hanya like atau komentar — NO follow
+        // ⚡ Hanya like atau komentar – NO follow
         const action = Math.random();
         if (action < 0.65) {
           // 65% → like
-          await _botLike(str(bot.user_id), str(post.id));
+          await _botLike(str(bot.user_id), str(post.id), bot.name);
         } else {
           // 35% → komentar
-          await _botComment(str(bot.user_id), str(post.id));
+          await _botComment(str(bot.user_id), str(post.id), bot.name);
         }
       }
 
@@ -280,52 +370,146 @@ export const runBotInteractions = async (): Promise<void> => {
         sql: 'UPDATE bots SET last_interact_at = ? WHERE id = ?',
         args: [a(new Date().toISOString()), a(str(bot.id))]
       });
-    } catch (err) {
-      logger.error('Bot: Interact failed', { bot: bot.name, err });
+
+      logger.info('Bot: Interactions completed', { bot: bot.name, targetPosts: targetPosts.length });
+
+    } catch (err: any) {
+      logger.error('Bot: Interact failed', { bot: bot.name, error: err.message });
     }
   }
+
+  logger.info('Bot: Interaction run completed');
 };
 
-// ─── PRIVATE HELPERS ──────────────────────────────────────────────────────────
+// ═══ PRIVATE HELPERS ═══════════════════════════════════════════════════════
 
-const _botLike = async (botUserId: string, postId: string): Promise<void> => {
-  const existing = await db.execute({
-    sql: 'SELECT id FROM reactions WHERE user_id = ? AND post_id = ?',
-    args: [a(botUserId), a(postId)]
-  });
-  if (existing.rows.length > 0) return;
-
-  await db.execute({
-    sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)',
-    args: [a(uuidv4()), a(botUserId), a(postId), a('like')]
-  });
-};
-
-const _botComment = async (botUserId: string, postId: string): Promise<void> => {
-  const existing = await db.execute({
-    sql: 'SELECT id FROM comments WHERE user_id = ? AND post_id = ? AND parent_id IS NULL',
-    args: [a(botUserId), a(postId)]
-  });
-  if (existing.rows.length > 0) return;
-
-  const comment = getRandomComment();
-  const now = new Date().toISOString();
-
-  await db.execute({
-    sql: `INSERT INTO comments (id, user_id, post_id, content, created_at) VALUES (?, ?, ?, ?, ?)`,
-    args: [a(uuidv4()), a(botUserId), a(postId), a(comment), a(now)]
-  });
-
-  // Notifikasi ke pemilik post
-  const post = await db.execute({
-    sql: 'SELECT user_id FROM feed_posts WHERE id = ?',
-    args: [a(postId)]
-  });
-  const postOwnerId = post.rows[0] ? str(post.rows[0].user_id) : null;
-  if (postOwnerId && postOwnerId !== botUserId) {
-    await db.execute({
-      sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id) VALUES (?, ?, ?, 'comment', ?)`,
-      args: [a(uuidv4()), a(postOwnerId), a(botUserId), a(postId)]
+const _botLike = async (botUserId: string, postId: string, botName: string): Promise<void> => {
+  try {
+    const existing = await db.execute({
+      sql: 'SELECT id FROM reactions WHERE user_id = ? AND post_id = ?',
+      args: [a(botUserId), a(postId)]
     });
+    if (existing.rows.length > 0) return;
+
+    await db.execute({
+      sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)',
+      args: [a(uuidv4()), a(botUserId), a(postId), a('like')]
+    });
+
+    // Notifikasi ke pemilik post
+    const post = await db.execute({
+      sql: 'SELECT user_id FROM feed_posts WHERE id = ?',
+      args: [a(postId)]
+    });
+    const postOwnerId = post.rows[0] ? str(post.rows[0].user_id) : null;
+    if (postOwnerId && postOwnerId !== botUserId) {
+      await db.execute({
+        sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id) VALUES (?, ?, ?, 'like', ?)`,
+        args: [a(uuidv4()), a(postOwnerId), a(botUserId), a(postId)]
+      });
+    }
+
+    logger.debug('Bot: Liked post', { bot: botName, postId });
+  } catch (err: any) {
+    logger.warn('Bot: Like failed', { bot: botName, postId, error: err.message });
   }
 };
+
+const _botComment = async (botUserId: string, postId: string, botName: string): Promise<void> => {
+  try {
+    const existing = await db.execute({
+      sql: 'SELECT id FROM comments WHERE user_id = ? AND post_id = ? AND parent_id IS NULL',
+      args: [a(botUserId), a(postId)]
+    });
+    if (existing.rows.length > 0) return;
+
+    const comment = getRandomComment();
+    const now = new Date().toISOString();
+
+    await db.execute({
+      sql: `INSERT INTO comments (id, user_id, post_id, content, created_at) VALUES (?, ?, ?, ?, ?)`,
+      args: [a(uuidv4()), a(botUserId), a(postId), a(comment), a(now)]
+    });
+
+    // Notifikasi ke pemilik post
+    const post = await db.execute({
+      sql: 'SELECT user_id FROM feed_posts WHERE id = ?',
+      args: [a(postId)]
+    });
+    const postOwnerId = post.rows[0] ? str(post.rows[0].user_id) : null;
+    if (postOwnerId && postOwnerId !== botUserId) {
+      await db.execute({
+        sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id) VALUES (?, ?, ?, 'comment', ?)`,
+        args: [a(uuidv4()), a(postOwnerId), a(botUserId), a(postId)]
+      });
+    }
+
+    logger.debug('Bot: Commented on post', { bot: botName, postId, comment });
+  } catch (err: any) {
+    logger.warn('Bot: Comment failed', { bot: botName, postId, error: err.message });
+  }
+};
+
+// ═══ MANUAL TESTING & UTILITIES ════════════════════════════════════════════
+
+export const testBotPosting = async (botUsername?: string): Promise<void> => {
+  logger.info('=== TESTING BOT POSTING ===');
+  
+  const whereClause = botUsername 
+    ? 'WHERE sp.username = ?' 
+    : 'WHERE b.is_active = 1 LIMIT 1';
+  const args = botUsername ? [a(botUsername)] : [];
+
+  const bot = await db.execute({
+    sql: `SELECT b.*, sp.user_id, sp.username FROM bots b
+          JOIN social_profiles sp ON sp.user_id = b.user_id
+          ${whereClause}`,
+    args
+  });
+
+  if (bot.rows.length === 0) {
+    logger.warn('No bot found for testing');
+    return;
+  }
+
+  const testBot = bot.rows[0] as any;
+  const topics: string[] = JSON.parse(str(testBot.topics) || '["quotes"]');
+  
+  logger.info('Testing bot', { 
+    username: testBot.username, 
+    topics,
+    name: testBot.name 
+  });
+
+  for (const topic of topics) {
+    logger.info(`Testing topic: ${topic}`);
+    
+    const content = await fetchContentByTopic(topic);
+    if (!content) {
+      logger.warn('❌ No content fetched', { topic });
+      continue;
+    }
+
+    // Test image upload if available
+    let finalImageUrl = null;
+    if (content.imageUrl) {
+      finalImageUrl = await uploadImageToCloudinary(content.imageUrl, testBot.name);
+    }
+
+    logger.info('✅ Content processed successfully', {
+      topic,
+      hasOriginalImage: !!content.imageUrl,
+      hasCloudinaryImage: !!finalImageUrl,
+      sourceName: content.sourceName,
+      contentPreview: content.content.substring(0, 100) + '...'
+    });
+
+    // Small delay between tests
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  logger.info('=== BOT TESTING COMPLETED ===');
+};
+
+// Export functions yang sudah ada
+export { initBots, runBotPosts, runBotInteractions };

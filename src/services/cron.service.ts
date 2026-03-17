@@ -7,59 +7,45 @@ import { cacheSet, cacheDelPattern } from './cache.service';
 import { initBots, runBotPosts, runBotInteractions } from './bot.service';
 import logger from './logger.service';
 
-// ─── RANDOM SCHEDULE HELPER ───────────────────────────────────────────────────
-// Jalankan fungsi pada waktu random dalam jendela waktu tertentu
-
 const scheduleRandom = (
   label: string,
-  intervalMinutes: number,     // setiap berapa menit interval
-  jitterMinutes: number,       // variasi random (±jitter)
+  intervalMinutes: number,
+  jitterMinutes: number,
   fn: () => Promise<void>
 ) => {
-  // Jalankan pertama kali setelah random delay
   const firstDelay = Math.random() * jitterMinutes * 60 * 1000;
   setTimeout(async () => {
     logger.info(`Cron Random: ${label} - first run`);
     try { await fn(); } catch (err) { logger.error(`Cron: ${label} failed`, { err }); }
 
-    // Lanjut dengan interval + jitter random
     const runWithJitter = async () => {
-      const jitter = (Math.random() * 2 - 1) * jitterMinutes * 60 * 1000; // ±jitter
-      const nextDelay = (intervalMinutes * 60 * 1000) + jitter;
+      const jitter = (Math.random() * 2 - 1) * jitterMinutes * 60 * 1000;
+      const nextDelay = Math.max((intervalMinutes * 60 * 1000) + jitter, 60_000);
       setTimeout(async () => {
         logger.info(`Cron Random: ${label} - scheduled run`);
         try { await fn(); } catch (err) { logger.error(`Cron: ${label} failed`, { err }); }
-        runWithJitter(); // Rekursif → jadwal berikutnya
-      }, Math.max(nextDelay, 60_000)); // minimal 1 menit
+        runWithJitter();
+      }, nextDelay);
     };
-
     runWithJitter();
   }, firstDelay);
 };
 
 export const initCronJobs = async () => {
 
-  // ─── INIT BOTS saat server start ─────────────────────
-  try {
-    await initBots();
-  } catch (err) {
-    logger.error('Failed to init bots', { err });
-  }
+  // ─── Init bots ───────────────────────────────────────
+  try { await initBots(); } catch (err) { logger.error('Failed to init bots', { err }); }
 
-  // ─── Fixed schedules (tetap, tidak random) ───────────
-
-  // Daily: Invalidate analytics cache jam 00:01
+  // ─── Daily: Invalidate analytics cache ───────────────
   cron.schedule('1 0 * * *', async () => {
-    logger.info('Cron: Invalidating analytics cache');
     await cacheDelPattern('analytics:*');
   }, { timezone: 'Asia/Jakarta' });
 
-  // Daily: Pre-generate On This Day jam 07:00
+  // ─── Daily: On This Day jam 07:00 ────────────────────
   cron.schedule('0 7 * * *', async () => {
-    logger.info('Cron: Pre-generating On This Day');
     const today = new Date();
     const mmdd = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const usersResult = await db.execute({ sql: 'SELECT id FROM users WHERE email NOT LIKE \'%@bot.ambarya.app\'', args: [] });
+    const usersResult = await db.execute({ sql: `SELECT id FROM users WHERE email NOT LIKE '%@bot.ambarya.app'`, args: [] });
 
     for (const user of usersResult.rows as any[]) {
       const entries = await db.execute({
@@ -75,11 +61,10 @@ export const initCronJobs = async () => {
     }
   }, { timezone: 'Asia/Jakarta' });
 
-  // Daily: Generate AI reflection jam 21:00
+  // ─── Daily: AI reflection jam 21:00 ──────────────────
   cron.schedule('0 21 * * *', async () => {
-    logger.info('Cron: Generating daily AI reflections');
     const today = new Date().toISOString().split('T')[0];
-    const usersResult = await db.execute({ sql: 'SELECT id FROM users WHERE email NOT LIKE \'%@bot.ambarya.app\'', args: [] });
+    const usersResult = await db.execute({ sql: `SELECT id FROM users WHERE email NOT LIKE '%@bot.ambarya.app'`, args: [] });
 
     for (const user of usersResult.rows as any[]) {
       const entries = await db.execute({
@@ -91,22 +76,22 @@ export const initCronJobs = async () => {
           const reflection = await getDailyReflection(entries.rows);
           await cacheSet(`daily-reflection:${user.id}:${today}`, reflection, 60 * 60 * 24);
         } catch (err) {
-          logger.error('Cron: Failed to generate reflection', { userId: user.id, err });
+          logger.error('Cron: Failed reflection', { userId: user.id, err });
         }
       }
     }
   }, { timezone: 'Asia/Jakarta' });
 
-  // Weekly: Cleanup expired refresh tokens
+  // ─── Weekly: Cleanup expired tokens ──────────────────
   cron.schedule('0 2 * * 0', async () => {
     await db.execute({ sql: `DELETE FROM refresh_tokens WHERE expires_at < datetime('now') OR revoked = 1`, args: [] });
     logger.info('Cron: Refresh tokens cleanup done');
   }, { timezone: 'Asia/Jakarta' });
 
-  // Yearly: Pre-generate Year in Review
+  // ─── Yearly: Year in Review ───────────────────────────
   cron.schedule('30 0 1 1 *', async () => {
     const lastYear = new Date().getFullYear() - 1;
-    const usersResult = await db.execute({ sql: 'SELECT id FROM users WHERE email NOT LIKE \'%@bot.ambarya.app\'', args: [] });
+    const usersResult = await db.execute({ sql: `SELECT id FROM users WHERE email NOT LIKE '%@bot.ambarya.app'`, args: [] });
 
     for (const user of usersResult.rows as any[]) {
       const result = await db.execute({
@@ -137,14 +122,44 @@ export const initCronJobs = async () => {
     }
   }, { timezone: 'Asia/Jakarta' });
 
+  // ─── AUTO-DELETE: Hapus bot posts > 2 hari ───────────
+  // Jalankan setiap hari jam 03:00
+  cron.schedule('0 3 * * *', async () => {
+    logger.info('Cron: Deleting old bot posts...');
+    try {
+      // Hapus komentar dulu baru postnya
+      await db.execute({
+        sql: `DELETE FROM comments WHERE post_id IN (
+          SELECT id FROM feed_posts
+          WHERE is_bot_post = 1
+          AND created_at < datetime('now', '-2 days')
+        )`,
+        args: []
+      });
+      await db.execute({
+        sql: `DELETE FROM reactions WHERE post_id IN (
+          SELECT id FROM feed_posts
+          WHERE is_bot_post = 1
+          AND created_at < datetime('now', '-2 days')
+        )`,
+        args: []
+      });
+      const result = await db.execute({
+        sql: `DELETE FROM feed_posts WHERE is_bot_post = 1 AND created_at < datetime('now', '-2 days')`,
+        args: []
+      });
+      logger.info('Cron: Old bot posts deleted', { rowsAffected: result.rowsAffected });
+    } catch (err) {
+      logger.error('Cron: Delete old posts failed', { err });
+    }
+  }, { timezone: 'Asia/Jakarta' });
+
   // ─── BOT SCHEDULES (random) ───────────────────────────
 
-  // ✅ Bot post: rata-rata setiap 90 menit, variasi ±30 menit
-  // Artinya jalan antara 60-120 menit sekali — tidak pernah sama
+  // Bot post: rata-rata 90 menit, variasi ±30 menit
   scheduleRandom('Bot Posts', 90, 30, runBotPosts);
 
-  // ✅ Bot interaksi: rata-rata setiap 45 menit, variasi ±15 menit
-  // Artinya jalan antara 30-60 menit sekali
+  // Bot interaksi: rata-rata 45 menit, variasi ±15 menit
   scheduleRandom('Bot Interactions', 45, 15, runBotInteractions);
 
   logger.info('✅ All cron jobs initialized');
