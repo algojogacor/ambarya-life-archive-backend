@@ -162,10 +162,9 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
   const newMedia = [...existingMedia, ...uploaded];
 
   await db.execute({
-    sql: 'UPDATE entries SET media = ?, updated_at = datetime("now") WHERE id = ?',
-    args: [JSON.stringify(newMedia), id]
-  });
-
+  sql: 'UPDATE entries SET media = ?, updated_at = datetime("now") WHERE id = ?', // Benar
+  args: [JSON.stringify(newMedia), id]
+});
   await logActivity(userId, 'media.upload', 'entry', id, { count: uploaded.length });
   res.json({ message: 'Media berhasil diupload!', media: newMedia });
 };
