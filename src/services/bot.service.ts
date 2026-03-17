@@ -6,8 +6,6 @@ import db from '../db/database';
 import { fetchContentByTopic } from './scraper.service';
 import logger from './logger.service';
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-
 const a = (v: unknown): InValue => {
   if (v === null || v === undefined) return null;
   if (typeof v === 'string') return v;
@@ -23,11 +21,8 @@ const str = (v: unknown): string => {
   return String(v);
 };
 
-const randInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
-
-const randomDelay = (minMs: number, maxMs: number) =>
-  new Promise(resolve => setTimeout(resolve, randInt(minMs, maxMs)));
+const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randomDelay = (minMs: number, maxMs: number) => new Promise(resolve => setTimeout(resolve, randInt(minMs, maxMs)));
 
 const GENERIC_COMMENTS = [
   'Bagus banget ini! 👍', 'Relate banget sama ini...', 'Makasih udah share!',
@@ -36,47 +31,113 @@ const GENERIC_COMMENTS = [
   'Ini yang aku butuhkan hari ini 🙏', 'Thanks for sharing', 'So true!',
   'Noted! 📝', 'Interesting banget!', 'Love this ❤️',
   'Wih beneran nih? 😮', 'Harus dicoba nih', 'Makasih infonya!',
-  'Bermanfaat banget', 'Udah lama cari info ini',
+  'Bermanfaat banget', 'Udah lama cari info ini', 'Mantap, lanjutkan!',
+  'Harus dishare nih 🔥', 'Beneran deh ini penting', 'Wow keren banget!',
 ];
 
-const getRandomComment = () =>
-  GENERIC_COMMENTS[Math.floor(Math.random() * GENERIC_COMMENTS.length)];
+const getRandomComment = () => GENERIC_COMMENTS[Math.floor(Math.random() * GENERIC_COMMENTS.length)];
 
-// ─── MAX BOTS ─────────────────────────────────────────────────────────────────
 const MAX_BOTS = 50;
 
-// ─── BOT TEMPLATES (seed awal) ────────────────────────────────────────────────
-// Ini hanya template awal. Bot baru bisa ditambah via API atau auto-generate.
+// ─── BOT TEMPLATES AWAL ───────────────────────────────────────────────────────
+// Username kreatif seperti creator konten nyata
 const BOT_TEMPLATES = [
-  { name: 'Berita Terkini', username: 'berita_terkini', bio: 'Update berita terbaru dari Indonesia dan dunia 📰', topics: ['news'], postMin: 2, postMax: 5, interactMin: 5, interactMax: 15 },
-  { name: 'Motivasi Harian', username: 'motivasi_harian', bio: 'Quotes dan motivasi untuk harimu 💪✨', topics: ['quotes', 'motivational'], postMin: 3, postMax: 6, interactMin: 8, interactMax: 20 },
-  { name: 'Dakwah Islam', username: 'dakwah_islam', bio: 'Berbagi hikmah dan ilmu Islam 🌙🤲', topics: ['islamic', 'dakwah'], postMin: 2, postMax: 4, interactMin: 3, interactMax: 10 },
-  { name: 'Tech News', username: 'tech_news_id', bio: 'Berita teknologi terkini 💻🚀', topics: ['tech'], postMin: 1, postMax: 3, interactMin: 4, interactMax: 12 },
-  { name: 'Fakta Unik', username: 'fakta_unik', bio: 'Fakta-fakta unik yang jarang diketahui 🧠', topics: ['facts'], postMin: 2, postMax: 4, interactMin: 6, interactMax: 18 },
-  { name: 'Life Tips', username: 'life_tips_id', bio: 'Tips kehidupan dan pengembangan diri 🌱', topics: ['life', 'quotes'], postMin: 2, postMax: 5, interactMin: 5, interactMax: 15 },
-  { name: 'Hiburan Seru', username: 'hiburan_seru', bio: 'Konten hiburan dan lifestyle terkini 🎭', topics: ['entertainment'], postMin: 2, postMax: 5, interactMin: 6, interactMax: 16 },
-  { name: 'Psikologi Kita', username: 'psikologi_kita', bio: 'Tips kesehatan mental dan psikologi 🧘', topics: ['life'], postMin: 1, postMax: 3, interactMin: 4, interactMax: 12 },
+  {
+    name: 'Rizky Pratama', username: 'rizky.pratama', avatar: null,
+    bio: 'Berbagi berita terkini yang perlu kamu tau 📰 | Jurnalis Independen',
+    topics: ['news'], postMin: 2, postMax: 5, interactMin: 5, interactMax: 15,
+    isGovernment: false,
+  },
+  {
+    name: 'Nadia Inspirasi', username: 'nadiainspirasi',avatar: null,
+    bio: 'Life coach & motivator ✨ | Setiap hari ada pelajaran baru',
+    topics: ['quotes', 'motivational'], postMin: 3, postMax: 6, interactMin: 8, interactMax: 20,
+    isGovernment: false,
+  },
+  {
+    name: 'Ustadz Fariz', username: 'ustadzfariz', avatar: null,
+    bio: 'Berbagi ilmu dan hikmah Islam 🌙 | Semoga bermanfaat dunia akhirat',
+    topics: ['islamic', 'dakwah'], postMin: 2, postMax: 4, interactMin: 3, interactMax: 10,
+    isGovernment: false,
+  },
+  {
+    name: 'Dika Tech', username: 'dikatech.id', avatar: null,
+    bio: 'Tech enthusiast 💻 | Review gadget, AI, dan dunia digital',
+    topics: ['tech'], postMin: 1, postMax: 3, interactMin: 4, interactMax: 12,
+    isGovernment: false,
+  },
+  {
+    name: 'Fakta Kita', username: 'faktakita', avatar: null,
+    bio: 'Fakta unik dan menarik yang bikin kamu bengong 🤯',
+    topics: ['facts'], postMin: 2, postMax: 4, interactMin: 6, interactMax: 18,
+    isGovernment: false,
+  },
+  {
+    name: 'Kak Sella', username: 'kaksella', avatar: null,
+    bio: 'Self-development & mental health 🌱 | Yuk tumbuh bareng!',
+    topics: ['life', 'quotes'], postMin: 2, postMax: 5, interactMin: 5, interactMax: 15,
+    isGovernment: false,
+  },
+  {
+    name: 'Entertain ID', username: 'entertainid', avatar: null,
+    bio: 'Hiburan, seleb, dan lifestyle terkini 🎭 | Stay updated!',
+    topics: ['entertainment'], postMin: 2, postMax: 5, interactMin: 6, interactMax: 16,
+    isGovernment: false,
+  },
+  {
+    name: 'dr. Mira Psikolog', username: 'drmira.psikolog', avatar: null,
+    bio: 'Psikolog klinis 🧘 | Mental health awareness | DM untuk konsultasi',
+    topics: ['life', 'health'], postMin: 1, postMax: 3, interactMin: 4, interactMax: 12,
+    isGovernment: false,
+  },
+  {
+    name: 'Ekonomi Rakyat', username: 'ekonomirakyat', avatar: null,
+    bio: 'Edukasi keuangan & ekonomi untuk semua 💰 | Yuk melek finansial!',
+    topics: ['economy', 'finance'], postMin: 2, postMax: 4, interactMin: 5, interactMax: 14,
+    isGovernment: false,
+  },
+  {
+    name: 'Alam Nusantara', username: 'alamnusantara', avatar: null,
+    bio: 'Kecantikan alam Indonesia & lingkungan hidup 🌿 | Love our planet',
+    topics: ['environment', 'nature'], postMin: 1, postMax: 3, interactMin: 4, interactMax: 10,
+    isGovernment: false,
+  },
+  // ✅ GOVERNMENT BOT KHUSUS
+  {
+    name: 'Info Pemerintah RI', username: 'infopemerintahri', avatar: null,
+    bio: '🇮🇩 Informasi resmi kebijakan dan program pemerintah Indonesia | Akun Informasi Publik',
+    topics: ['government', 'news'], postMin: 6, postMax: 6, interactMin: 2, interactMax: 5,
+    isGovernment: true,
+  },
+];
+
+// ─── BOT NAME POOL untuk auto-grow ───────────────────────────────────────────
+const BOT_NAME_POOL = [
+  { name: 'Andi Berita', prefix: 'andiberita', topics: ['news'], bio: 'Pecinta berita dan jurnalisme warga 📡' },
+  { name: 'Sari Quotes', prefix: 'sariquotes', topics: ['quotes', 'motivational'], bio: 'Kumpulan kata bijak untuk harimu ✨' },
+  { name: 'Budi Teknologi', prefix: 'buditeknologi', topics: ['tech'], bio: 'Ngobrolin teknologi sehari-hari 🤖' },
+  { name: 'Nurul Hikmah', prefix: 'nurulhikmah', topics: ['islamic'], bio: 'Mutiara hikmah dan tausiyah harian 🌙' },
+  { name: 'Reza Life', prefix: 'rezalife', topics: ['life', 'quotes'], bio: 'Sharing soal hidup, karir & kebahagiaan 🌈' },
+  { name: 'Tio Fakta', prefix: 'tiofakta', topics: ['facts'], bio: 'Koleksi fakta mengejutkan dari seluruh dunia 🌍' },
+  { name: 'Maya Sehat', prefix: 'mayasehat', topics: ['health', 'life'], bio: 'Tips hidup sehat fisik dan mental 💪' },
+  { name: 'Galih Viral', prefix: 'galihviral', topics: ['entertainment', 'news'], bio: 'Konten viral yang wajib kamu lihat 🔥' },
+  { name: 'Dewi Edukasi', prefix: 'dewiedukasi', topics: ['education', 'life'], bio: 'Edukasi seru dan bermanfaat untuk semua 📚' },
+  { name: 'Hendra Bisnis', prefix: 'hendrabisnis', topics: ['economy', 'finance'], bio: 'Tips bisnis dan investasi untuk pemula 💼' },
+  { name: 'Putri Alam', prefix: 'putrialam', topics: ['environment', 'nature'], bio: 'Pecinta alam dan lingkungan hidup 🌿' },
+  { name: 'Arif Kuliner', prefix: 'arifkuliner', topics: ['food', 'life'], bio: 'Eksplorasi kuliner Nusantara dan dunia 🍜' },
+  { name: 'Lina Budaya', prefix: 'linabudaya', topics: ['culture', 'news'], bio: 'Merawat budaya dan tradisi Indonesia 🎭' },
+  { name: 'Yoga Olahraga', prefix: 'yogaolahraga', topics: ['sports', 'health'], bio: 'Semangat olahraga dan gaya hidup aktif ⚽' },
+  { name: 'Citra Seni', prefix: 'citraseni', topics: ['art', 'entertainment'], bio: 'Apresiasi seni, musik, dan kreativitas 🎨' },
 ];
 
 // ─── RECENT CONTENT CACHE (anti-duplikat) ─────────────────────────────────────
-// Simpan hash konten yang baru saja dipost untuk hindari duplikat
 const recentContentHashes = new Set<string>();
 const MAX_HASH_CACHE = 500;
 
-const simpleHash = (content: string): string => {
-  // Ambil 50 karakter pertama sebagai fingerprint
-  return content.trim().toLowerCase().substring(0, 50);
-};
-
-const isContentDuplicate = (content: string): boolean => {
-  const hash = simpleHash(content);
-  return recentContentHashes.has(hash);
-};
-
+const simpleHash = (content: string): string => content.trim().toLowerCase().substring(0, 50);
+const isContentDuplicate = (content: string): boolean => recentContentHashes.has(simpleHash(content));
 const markContentUsed = (content: string): void => {
-  const hash = simpleHash(content);
-  recentContentHashes.add(hash);
-  // Kalau cache terlalu besar, hapus yang paling lama
+  recentContentHashes.add(simpleHash(content));
   if (recentContentHashes.size > MAX_HASH_CACHE) {
     const first = recentContentHashes.values().next().value;
     if (first) recentContentHashes.delete(first);
@@ -88,28 +149,11 @@ const markContentUsed = (content: string): void => {
 export const initBots = async (): Promise<void> => {
   logger.info('Bot: Initializing bots...');
 
-  // Cek total bot yang sudah ada
-  const countResult = await db.execute({
-    sql: 'SELECT COUNT(*) as count FROM bots WHERE is_active = 1',
-    args: []
-  });
-  const currentBotCount = Number((countResult.rows[0] as any).count);
-
-  if (currentBotCount >= MAX_BOTS) {
-    logger.info(`Bot: Already at max (${currentBotCount}/${MAX_BOTS}), skipping init`);
-    return;
-  }
-
   for (const template of BOT_TEMPLATES) {
-    // Cek total lagi setiap iterasi
     const cnt = await db.execute({ sql: 'SELECT COUNT(*) as count FROM bots WHERE is_active = 1', args: [] });
-    if (Number((cnt.rows[0] as any).count) >= MAX_BOTS) {
-      logger.info(`Bot: Reached max bots (${MAX_BOTS}), stopping`);
-      break;
-    }
+    if (Number((cnt.rows[0] as any).count) >= MAX_BOTS) break;
 
     try {
-      // Cek apakah username sudah ada
       const existing = await db.execute({
         sql: 'SELECT id FROM social_profiles WHERE username = ?',
         args: [a(template.username)]
@@ -127,9 +171,14 @@ export const initBots = async (): Promise<void> => {
       });
       await db.execute({
         sql: `INSERT INTO bots (id, user_id, name, bio, topics, sources, post_frequency_min, post_frequency_max, interact_frequency_min, interact_frequency_max) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [a(uuidv4()), a(botUserId), a(template.name), a(template.bio), a(JSON.stringify(template.topics)), a('["rss","ai"]'), a(template.postMin), a(template.postMax), a(template.interactMin), a(template.interactMax)]
+        args: [
+          a(uuidv4()), a(botUserId), a(template.name), a(template.bio),
+          a(JSON.stringify(template.topics)), a('["rss","ai"]'),
+          a(template.postMin), a(template.postMax),
+          a(template.interactMin), a(template.interactMax)
+        ]
       });
-      logger.info('Bot: Created', { username: template.username });
+      logger.info('Bot: Created', { username: template.username, isGovernment: template.isGovernment });
     } catch (err) {
       logger.error('Bot: Failed to create', { username: template.username, err });
     }
@@ -138,26 +187,10 @@ export const initBots = async (): Promise<void> => {
   logger.info('Bot: Init complete');
 };
 
-// ─── AUTO-GROW BOTS (tambah bot baru secara acak) ─────────────────────────────
-
-const BOT_NAME_POOL = [
-  { name: 'Berita Pagi', prefix: 'berita_pagi', topics: ['news'], bio: 'Sajian berita hangat setiap pagi ☀️' },
-  { name: 'Quote of Day', prefix: 'quote_day', topics: ['quotes'], bio: 'Satu quote setiap hari untuk jiwamu 🌟' },
-  { name: 'Info Teknologi', prefix: 'info_tek', topics: ['tech'], bio: 'Dunia teknologi dalam genggamanmu 📱' },
-  { name: 'Mutiara Hikmah', prefix: 'mutiara_hikmah', topics: ['islamic'], bio: 'Hikmah dan inspirasi dari Al-Quran 📖' },
-  { name: 'Gaya Hidup', prefix: 'gaya_hidup', topics: ['life', 'entertainment'], bio: 'Tips gaya hidup sehat dan bahagia 🌈' },
-  { name: 'Fakta Harian', prefix: 'fakta_harian', topics: ['facts'], bio: 'Fakta mengejutkan setiap hari! 😱' },
-  { name: 'Motivasi ID', prefix: 'motivasi_id', topics: ['motivational'], bio: 'Bangkit dan raih impianmu! 🚀' },
-  { name: 'Ilmu Jiwa', prefix: 'ilmu_jiwa', topics: ['life'], bio: 'Psikologi & kesehatan mental untuk semua 🧠' },
-  { name: 'Kabar Dunia', prefix: 'kabar_dunia', topics: ['news'], bio: 'Berita terkini dari seluruh penjuru dunia 🌍' },
-  { name: 'Tren Kini', prefix: 'tren_kini', topics: ['entertainment', 'life'], bio: 'Tren terkini yang wajib kamu tau 🔥' },
-];
+// ─── AUTO-GROW BOTS ───────────────────────────────────────────────────────────
 
 export const growBots = async (): Promise<void> => {
-  const countResult = await db.execute({
-    sql: 'SELECT COUNT(*) as count FROM bots WHERE is_active = 1',
-    args: []
-  });
+  const countResult = await db.execute({ sql: 'SELECT COUNT(*) as count FROM bots WHERE is_active = 1', args: [] });
   const currentCount = Number((countResult.rows[0] as any).count);
 
   if (currentCount >= MAX_BOTS) {
@@ -165,55 +198,87 @@ export const growBots = async (): Promise<void> => {
     return;
   }
 
-  // Tambah 1-2 bot baru secara acak
   const toAdd = Math.min(randInt(1, 2), MAX_BOTS - currentCount);
 
   for (let i = 0; i < toAdd; i++) {
     const template = BOT_NAME_POOL[Math.floor(Math.random() * BOT_NAME_POOL.length)];
-
-    // Generate username unik dengan suffix angka
     const suffix = randInt(1, 999);
-    const username = `${template.prefix}_${suffix}`;
+    const username = `${template.prefix}${suffix}`;
 
-    // Cek username belum dipakai
-    const existing = await db.execute({
-      sql: 'SELECT id FROM social_profiles WHERE username = ?',
-      args: [a(username)]
-    });
+    const existing = await db.execute({ sql: 'SELECT id FROM social_profiles WHERE username = ?', args: [a(username)] });
     if (existing.rows.length > 0) continue;
 
     try {
       const botUserId = uuidv4();
       await db.execute({
         sql: `INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)`,
-        args: [a(botUserId), a(`${template.name} ${suffix}`), a(`${username}@bot.ambarya.app`), a('bot_no_login')]
+        args: [a(botUserId), a(template.name), a(`${username}@bot.ambarya.app`), a('bot_no_login')]
       });
       await db.execute({
         sql: `INSERT INTO social_profiles (id, user_id, username, display_name, bio, is_bot, bot_topics) VALUES (?, ?, ?, ?, ?, 1, ?)`,
-        args: [a(uuidv4()), a(botUserId), a(username), a(`${template.name} ${suffix}`), a(template.bio), a(JSON.stringify(template.topics))]
+        args: [a(uuidv4()), a(botUserId), a(username), a(template.name), a(template.bio), a(JSON.stringify(template.topics))]
       });
       await db.execute({
         sql: `INSERT INTO bots (id, user_id, name, bio, topics, sources, post_frequency_min, post_frequency_max, interact_frequency_min, interact_frequency_max) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [a(uuidv4()), a(botUserId), a(`${template.name} ${suffix}`), a(template.bio), a(JSON.stringify(template.topics)), a('["rss","ai"]'), a(randInt(1, 3)), a(randInt(4, 7)), a(randInt(3, 8)), a(randInt(10, 20))]
+        args: [
+          a(uuidv4()), a(botUserId), a(template.name), a(template.bio),
+          a(JSON.stringify(template.topics)), a('["rss","ai"]'),
+          a(randInt(1, 3)), a(randInt(4, 7)), a(randInt(3, 8)), a(randInt(10, 20))
+        ]
       });
-      logger.info('Bot: Auto-grew new bot', { username, currentCount: currentCount + i + 1 });
+      logger.info('Bot: Auto-grew', { username, count: currentCount + i + 1 });
     } catch (err) {
       logger.error('Bot: Auto-grow failed', { username, err });
     }
   }
 };
 
-// ─── BOT POST ─────────────────────────────────────────────────────────────────
+// ─── GOVERNMENT BOT POST (6x per jam, waktu random) ─────────────────────────
+
+export const runGovernmentBotPost = async (): Promise<void> => {
+  const govBot = await db.execute({
+    sql: `SELECT b.*, sp.user_id FROM bots b
+          JOIN social_profiles sp ON sp.user_id = b.user_id
+          WHERE sp.username = 'infopemerintahri' AND b.is_active = 1`,
+    args: []
+  });
+
+  if (govBot.rows.length === 0) return;
+  const bot = govBot.rows[0] as any;
+
+  const content = await fetchContentByTopic('government');
+  if (!content || isContentDuplicate(content.content)) return;
+
+  markContentUsed(content.content);
+
+  const postId = uuidv4();
+  const now = new Date().toISOString();
+  const mediaJson = content.imageUrl
+    ? JSON.stringify([{ url: content.imageUrl, type: 'image', name: 'thumbnail' }])
+    : '[]';
+
+  await db.execute({
+    sql: `INSERT INTO feed_posts (id, user_id, content, media, visibility, is_bot_post, source_url, source_name, created_at)
+          VALUES (?, ?, ?, ?, 'public', 1, ?, ?, ?)`,
+    args: [a(postId), a(str(bot.user_id)), a(content.content), a(mediaJson), a(content.sourceUrl || null), a(content.sourceName || null), a(now)]
+  });
+
+  logger.info('Gov Bot: Posted', { postId, hasImage: !!content.imageUrl });
+};
+
+// ─── BOT POST (regular) ───────────────────────────────────────────────────────
 
 export const runBotPosts = async (): Promise<void> => {
   logger.info('Bot: Running bot posts...');
 
   const bots = await db.execute({
-    sql: `SELECT b.*, sp.user_id FROM bots b JOIN social_profiles sp ON sp.user_id = b.user_id WHERE b.is_active = 1`,
+    sql: `SELECT b.*, sp.user_id FROM bots b
+          JOIN social_profiles sp ON sp.user_id = b.user_id
+          WHERE b.is_active = 1 AND sp.username != 'infopemerintahri'`,
     args: []
   });
 
-  // Load recent posts untuk cek duplikat dari DB juga
+  // Load recent hashes
   const recentPosts = await db.execute({
     sql: `SELECT content FROM feed_posts WHERE is_bot_post = 1 AND created_at > datetime('now', '-2 days') ORDER BY created_at DESC LIMIT 100`,
     args: []
@@ -231,12 +296,9 @@ export const runBotPosts = async (): Promise<void> => {
       const topics: string[] = JSON.parse(str(bot.topics) || '["quotes"]');
 
       for (let i = 0; i < postCount; i++) {
-        // ✅ Random delay antar post (1-10 menit)
-        await randomDelay(60_000, 600_000);
+        await randomDelay(30_000, 300_000);
 
         const topic = topics[Math.floor(Math.random() * topics.length)];
-
-        // Coba maksimal 3x untuk dapat konten yang tidak duplikat
         let content = null;
         let imageUrl = null;
         let sourceName = null;
@@ -245,7 +307,6 @@ export const runBotPosts = async (): Promise<void> => {
         for (let attempt = 0; attempt < 3; attempt++) {
           const fetched = await fetchContentByTopic(topic);
           if (!fetched) break;
-
           if (!isContentDuplicate(fetched.content)) {
             content = fetched.content;
             imageUrl = fetched.imageUrl || null;
@@ -253,12 +314,9 @@ export const runBotPosts = async (): Promise<void> => {
             sourceUrl = fetched.sourceUrl || null;
             break;
           }
-          logger.info('Bot: Duplicate content detected, retrying...', { bot: bot.name });
         }
 
         if (!content) continue;
-
-        // Mark content sebagai sudah dipakai
         markContentUsed(content);
 
         const postId = uuidv4();
@@ -288,8 +346,6 @@ export const runBotPosts = async (): Promise<void> => {
 // ─── BOT INTERACT ─────────────────────────────────────────────────────────────
 
 export const runBotInteractions = async (): Promise<void> => {
-  logger.info('Bot: Running interactions...');
-
   const bots = await db.execute({
     sql: `SELECT b.*, sp.user_id FROM bots b JOIN social_profiles sp ON sp.user_id = b.user_id WHERE b.is_active = 1`,
     args: []
@@ -307,11 +363,7 @@ export const runBotInteractions = async (): Promise<void> => {
       const activationChance = Number(bot.interact_frequency_max) / 25;
       if (Math.random() > Math.min(activationChance, 0.7)) continue;
 
-      const interactCount = randInt(
-        Math.ceil(Number(bot.interact_frequency_min) / 2),
-        Math.min(Number(bot.interact_frequency_max), 8)
-      );
-
+      const interactCount = randInt(Math.ceil(Number(bot.interact_frequency_min) / 2), Math.min(Number(bot.interact_frequency_max), 8));
       const shuffled = [...recentPosts.rows].sort(() => Math.random() - 0.5);
       const targets = shuffled.slice(0, Math.min(interactCount, shuffled.length));
 
@@ -334,25 +386,14 @@ export const runBotInteractions = async (): Promise<void> => {
   }
 };
 
-// ─── PRIVATE HELPERS ──────────────────────────────────────────────────────────
-
 const _botLike = async (botUserId: string, postId: string): Promise<void> => {
-  const existing = await db.execute({
-    sql: 'SELECT id FROM reactions WHERE user_id = ? AND post_id = ?',
-    args: [a(botUserId), a(postId)]
-  });
+  const existing = await db.execute({ sql: 'SELECT id FROM reactions WHERE user_id = ? AND post_id = ?', args: [a(botUserId), a(postId)] });
   if (existing.rows.length > 0) return;
-  await db.execute({
-    sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)',
-    args: [a(uuidv4()), a(botUserId), a(postId), a('like')]
-  });
+  await db.execute({ sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)', args: [a(uuidv4()), a(botUserId), a(postId), a('like')] });
 };
 
 const _botComment = async (botUserId: string, postId: string): Promise<void> => {
-  const existing = await db.execute({
-    sql: 'SELECT id FROM comments WHERE user_id = ? AND post_id = ? AND parent_id IS NULL',
-    args: [a(botUserId), a(postId)]
-  });
+  const existing = await db.execute({ sql: 'SELECT id FROM comments WHERE user_id = ? AND post_id = ? AND parent_id IS NULL', args: [a(botUserId), a(postId)] });
   if (existing.rows.length > 0) return;
 
   const comment = getRandomComment();
