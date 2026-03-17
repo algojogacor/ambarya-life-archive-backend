@@ -177,30 +177,35 @@ export const getFeed = async (req: Request, res: Response): Promise<void> => {
     result = await db.execute({
       sql: `SELECT fp.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot,
               (SELECT COUNT(*) FROM reactions WHERE post_id = fp.id) as reactions_count,
-              (SELECT COUNT(*) FROM comments WHERE post_id = fp.id) as comments_count,
-              (SELECT type FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
-            FROM feed_posts fp JOIN social_profiles sp ON sp.user_id = fp.user_id
-            WHERE (fp.user_id = ? OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?) OR (fp.is_bot_post = 1 AND fp.visibility = 'public'))
-            AND fp.visibility != 'private' AND fp.created_at < ?
-            ORDER BY fp.created_at DESC LIMIT ?`,
-      args: [a(userId), a(userId), a(userId), a(cursor), a(limitNum)]
+              (SELECT COUNT(*) FROM comments  WHERE post_id = fp.id) as comments_count,
+              (SELECT type    FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
+            FROM feed_posts fp
+            JOIN social_profiles sp ON sp.user_id = fp.user_id
+            WHERE fp.visibility = 'public'
+              AND fp.created_at < ?
+            ORDER BY fp.created_at DESC
+            LIMIT ?`,
+      args: [a(userId), a(cursor), a(limitNum)]
     });
   } else {
     result = await db.execute({
       sql: `SELECT fp.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot,
               (SELECT COUNT(*) FROM reactions WHERE post_id = fp.id) as reactions_count,
-              (SELECT COUNT(*) FROM comments WHERE post_id = fp.id) as comments_count,
-              (SELECT type FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
-            FROM feed_posts fp JOIN social_profiles sp ON sp.user_id = fp.user_id
-            WHERE (fp.user_id = ? OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?) OR (fp.is_bot_post = 1 AND fp.visibility = 'public'))
-            AND fp.visibility != 'private'
-            ORDER BY fp.created_at DESC LIMIT ?`,
-      args: [a(userId), a(userId), a(userId), a(limitNum)]
+              (SELECT COUNT(*) FROM comments  WHERE post_id = fp.id) as comments_count,
+              (SELECT type    FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
+            FROM feed_posts fp
+            JOIN social_profiles sp ON sp.user_id = fp.user_id
+            WHERE fp.visibility = 'public'
+            ORDER BY fp.created_at DESC
+            LIMIT ?`,
+      args: [a(userId), a(limitNum)]
     });
   }
 
   const posts = result.rows.map(parsePost);
-  const nextCursor = posts.length === limitNum ? str((posts[posts.length - 1] as any).created_at) : null;
+  const nextCursor = posts.length === limitNum
+    ? str((posts[posts.length - 1] as any).created_at)
+    : null;
   res.json({ posts, next_cursor: nextCursor });
 };
 
