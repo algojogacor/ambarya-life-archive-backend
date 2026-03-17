@@ -9,12 +9,20 @@ import logger from '../services/logger.service';
 
 // ─── TYPE-SAFE HELPERS ────────────────────────────────────────────────────────
 
-// Wrap semua nilai jadi InValue — solusi tuntas untuk semua TS error libsql
+// Untuk db.execute args — semua value jadi InValue
 const a = (v: unknown): InValue => {
   if (v === null || v === undefined) return null;
   if (typeof v === 'string') return v;
   if (typeof v === 'number') return v;
   if (typeof v === 'boolean') return v ? 1 : 0;
+  return String(v);
+};
+
+// Untuk logActivity & fungsi lain yang butuh string murni
+const str = (v: unknown): string => {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v) && v.length > 0) return String(v[0]);
+  if (v === null || v === undefined) return '';
   return String(v);
 };
 
@@ -33,7 +41,7 @@ const parsePost = (row: any) => ({
 // ─── PROFILE ─────────────────────────────────────────────────────────────────
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
-  const username = req.params.username;
+  const username = str(req.params.username);
   const result = await db.execute({
     sql: `SELECT sp.*, u.name, u.email,
             (SELECT COUNT(*) FROM follows WHERE following_id = sp.user_id) as followers_count,
@@ -49,7 +57,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const getMyProfile = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
+  const userId = str((req as any).user.id);
   const result = await db.execute({
     sql: `SELECT sp.*, u.name, u.email,
             (SELECT COUNT(*) FROM follows WHERE following_id = sp.user_id) as followers_count,
@@ -65,7 +73,7 @@ export const getMyProfile = async (req: Request, res: Response): Promise<void> =
 };
 
 export const createOrUpdateProfile = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
+  const userId = str((req as any).user.id);
   const { username, display_name, bio, avatar_url } = req.body;
   if (!username) { res.status(400).json({ error: 'Username wajib diisi' }); return; }
 
@@ -111,15 +119,18 @@ export const searchUsers = async (req: Request, res: Response): Promise<void> =>
 // ─── FOLLOW ───────────────────────────────────────────────────────────────────
 
 export const followUser = async (req: Request, res: Response): Promise<void> => {
-  const followerId = (req as any).user.id as string;
-  const username = req.params.username;
+  const followerId = str((req as any).user.id);
+  const username = str(req.params.username);
+
   const target = await db.execute({
     sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
     args: [a(username)]
   });
   if (target.rows.length === 0) { res.status(404).json({ error: 'User tidak ditemukan' }); return; }
-  const followingId = target.rows[0].user_id as string;
+
+  const followingId = str(target.rows[0].user_id);
   if (followerId === followingId) { res.status(400).json({ error: 'Tidak bisa follow diri sendiri' }); return; }
+
   try {
     await db.execute({
       sql: 'INSERT INTO follows (id, follower_id, following_id) VALUES (?, ?, ?)',
@@ -138,22 +149,26 @@ export const followUser = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const unfollowUser = async (req: Request, res: Response): Promise<void> => {
-  const followerId = (req as any).user.id as string;
-  const username = req.params.username;
+  const followerId = str((req as any).user.id);
+  const username = str(req.params.username);
+
   const target = await db.execute({
     sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
     args: [a(username)]
   });
   if (target.rows.length === 0) { res.status(404).json({ error: 'User tidak ditemukan' }); return; }
+
+  const followingId = str(target.rows[0].user_id);
   await db.execute({
     sql: 'DELETE FROM follows WHERE follower_id = ? AND following_id = ?',
-    args: [a(followerId), a(target.rows[0].user_id)]
+    args: [a(followerId), a(followingId)]
   });
+  await logActivity(followerId, 'social.unfollow', 'user', followingId);
   res.json({ message: 'Berhasil unfollow!' });
 };
 
 export const getFollowers = async (req: Request, res: Response): Promise<void> => {
-  const username = req.params.username;
+  const username = str(req.params.username);
   const target = await db.execute({
     sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
     args: [a(username)]
@@ -163,13 +178,13 @@ export const getFollowers = async (req: Request, res: Response): Promise<void> =
     sql: `SELECT sp.username, sp.display_name, sp.avatar_url, sp.is_bot
           FROM follows f JOIN social_profiles sp ON sp.user_id = f.follower_id
           WHERE f.following_id = ? ORDER BY f.created_at DESC`,
-    args: [a(target.rows[0].user_id)]
+    args: [a(str(target.rows[0].user_id))]
   });
   res.json({ followers: result.rows });
 };
 
 export const getFollowing = async (req: Request, res: Response): Promise<void> => {
-  const username = req.params.username;
+  const username = str(req.params.username);
   const target = await db.execute({
     sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
     args: [a(username)]
@@ -179,7 +194,7 @@ export const getFollowing = async (req: Request, res: Response): Promise<void> =
     sql: `SELECT sp.username, sp.display_name, sp.avatar_url, sp.is_bot
           FROM follows f JOIN social_profiles sp ON sp.user_id = f.following_id
           WHERE f.follower_id = ? ORDER BY f.created_at DESC`,
-    args: [a(target.rows[0].user_id)]
+    args: [a(str(target.rows[0].user_id))]
   });
   res.json({ following: result.rows });
 };
@@ -187,7 +202,7 @@ export const getFollowing = async (req: Request, res: Response): Promise<void> =
 // ─── FEED ─────────────────────────────────────────────────────────────────────
 
 export const getFeed = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
+  const userId = str((req as any).user.id);
   const cursor = qs(req.query.cursor);
   const limitNum = Number(qs(req.query.limit) || '20');
 
@@ -221,7 +236,7 @@ export const getFeed = async (req: Request, res: Response): Promise<void> => {
   }
 
   const posts = result.rows.map(parsePost);
-  const nextCursor = posts.length === limitNum ? (posts[posts.length - 1] as any).created_at as string : null;
+  const nextCursor = posts.length === limitNum ? str((posts[posts.length - 1] as any).created_at) : null;
   res.json({ posts, next_cursor: nextCursor });
 };
 
@@ -253,12 +268,12 @@ export const getPublicFeed = async (req: Request, res: Response): Promise<void> 
   }
 
   const posts = result.rows.map(parsePost);
-  const nextCursor = posts.length === limitNum ? (posts[posts.length - 1] as any).created_at as string : null;
+  const nextCursor = posts.length === limitNum ? str((posts[posts.length - 1] as any).created_at) : null;
   res.json({ posts, next_cursor: nextCursor });
 };
 
 export const createPost = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
+  const userId = str((req as any).user.id);
   const { content, media, visibility, entry_id } = req.body;
 
   if (!content && (!media || media.length === 0) && !entry_id) {
@@ -278,8 +293,9 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const deletePost = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id;
+  const userId = str((req as any).user.id);
+  const id = str(req.params.id);
+
   const result = await db.execute({
     sql: 'SELECT * FROM feed_posts WHERE id = ? AND user_id = ?',
     args: [a(id), a(userId)]
@@ -295,9 +311,9 @@ export const deletePost = async (req: Request, res: Response): Promise<void> => 
 // ─── REACTIONS ────────────────────────────────────────────────────────────────
 
 export const reactToPost = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id;
-  const type = (req.body.type as string) || 'like';
+  const userId = str((req as any).user.id);
+  const id = str(req.params.id);
+  const type = str(req.body.type) || 'like';
 
   const post = await db.execute({ sql: 'SELECT * FROM feed_posts WHERE id = ?', args: [a(id)] });
   if (post.rows.length === 0) { res.status(404).json({ error: 'Post tidak ditemukan' }); return; }
@@ -321,7 +337,7 @@ export const reactToPost = async (req: Request, res: Response): Promise<void> =>
     sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)',
     args: [a(uuidv4()), a(userId), a(id), a(type)]
   });
-  const postOwnerId = post.rows[0].user_id as string;
+  const postOwnerId = str(post.rows[0].user_id);
   if (postOwnerId !== userId) {
     await db.execute({
       sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id) VALUES (?, ?, ?, 'reaction', ?)`,
@@ -335,7 +351,7 @@ export const reactToPost = async (req: Request, res: Response): Promise<void> =>
 // ─── COMMENTS ────────────────────────────────────────────────────────────────
 
 export const getComments = async (req: Request, res: Response): Promise<void> => {
-  const id = req.params.id;
+  const id = str(req.params.id);
   const result = await db.execute({
     sql: `SELECT c.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot,
             (SELECT COUNT(*) FROM comments WHERE parent_id = c.id) as replies_count
@@ -347,7 +363,7 @@ export const getComments = async (req: Request, res: Response): Promise<void> =>
 };
 
 export const getReplies = async (req: Request, res: Response): Promise<void> => {
-  const commentId = req.params.commentId;
+  const commentId = str(req.params.commentId);
   const result = await db.execute({
     sql: `SELECT c.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot
           FROM comments c JOIN social_profiles sp ON sp.user_id = c.user_id
@@ -358,9 +374,10 @@ export const getReplies = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const addComment = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
-  const id = req.params.id;
-  const { content, parent_id } = req.body;
+  const userId = str((req as any).user.id);
+  const id = str(req.params.id);
+  const content = str(req.body.content);
+  const parentId = req.body.parent_id ? str(req.body.parent_id) : null;
 
   if (!content) { res.status(400).json({ error: 'Komentar tidak boleh kosong' }); return; }
 
@@ -371,10 +388,10 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
   const now = new Date().toISOString();
   await db.execute({
     sql: `INSERT INTO comments (id, user_id, post_id, content, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [a(commentId), a(userId), a(id), a(content), a(parent_id || null), a(now)]
+    args: [a(commentId), a(userId), a(id), a(content), a(parentId), a(now)]
   });
 
-  const postOwnerId = post.rows[0].user_id as string;
+  const postOwnerId = str(post.rows[0].user_id);
   if (postOwnerId !== userId) {
     await db.execute({
       sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id, comment_id) VALUES (?, ?, ?, 'comment', ?, ?)`,
@@ -382,9 +399,9 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
     });
   }
 
-  if (parent_id) {
-    const parentComment = await db.execute({ sql: 'SELECT user_id FROM comments WHERE id = ?', args: [a(parent_id)] });
-    const parentOwnerId = parentComment.rows[0]?.user_id as string | undefined;
+  if (parentId) {
+    const parentComment = await db.execute({ sql: 'SELECT user_id FROM comments WHERE id = ?', args: [a(parentId)] });
+    const parentOwnerId = parentComment.rows[0] ? str(parentComment.rows[0].user_id) : null;
     if (parentOwnerId && parentOwnerId !== userId) {
       await db.execute({
         sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id, comment_id) VALUES (?, ?, ?, 'reply', ?, ?)`,
@@ -403,8 +420,9 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const deleteComment = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
-  const commentId = req.params.commentId;
+  const userId = str((req as any).user.id);
+  const commentId = str(req.params.commentId);
+
   const result = await db.execute({
     sql: 'SELECT * FROM comments WHERE id = ? AND user_id = ?',
     args: [a(commentId), a(userId)]
@@ -419,7 +437,7 @@ export const deleteComment = async (req: Request, res: Response): Promise<void> 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 
 export const getNotifications = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
+  const userId = str((req as any).user.id);
   const result = await db.execute({
     sql: `SELECT sn.*, sp.username as actor_username, sp.display_name as actor_display_name, sp.avatar_url as actor_avatar
           FROM social_notifications sn JOIN social_profiles sp ON sp.user_id = sn.actor_id
@@ -430,7 +448,7 @@ export const getNotifications = async (req: Request, res: Response): Promise<voi
 };
 
 export const markNotificationsRead = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
+  const userId = str((req as any).user.id);
   await db.execute({ sql: 'UPDATE social_notifications SET is_read = 1 WHERE user_id = ?', args: [a(userId)] });
   res.json({ message: 'Notifikasi ditandai sudah dibaca' });
 };
@@ -438,9 +456,9 @@ export const markNotificationsRead = async (req: Request, res: Response): Promis
 // ─── SHARE ENTRY TO FEED ──────────────────────────────────────────────────────
 
 export const shareEntryToFeed = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user.id as string;
-  const entryId = req.params.entry_id;
-  const visibility = (req.body.visibility as string) || 'public';
+  const userId = str((req as any).user.id);
+  const entryId = str(req.params.entry_id);
+  const visibility = str(req.body.visibility) || 'public';
 
   const entry = await db.execute({
     sql: 'SELECT * FROM entries WHERE id = ? AND user_id = ?',
@@ -453,7 +471,7 @@ export const shareEntryToFeed = async (req: Request, res: Response): Promise<voi
   const now = new Date().toISOString();
   await db.execute({
     sql: `INSERT INTO feed_posts (id, user_id, entry_id, content, media, visibility, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [a(id), a(userId), a(entryId), a(e.content || e.title || null), a(e.media || '[]'), a(visibility), a(now)]
+    args: [a(id), a(userId), a(entryId), a(str(e.content) || str(e.title) || null), a(str(e.media) || '[]'), a(visibility), a(now)]
   });
   await db.execute({ sql: 'UPDATE entries SET visibility = ? WHERE id = ?', args: [a(visibility), a(entryId)] });
   await logActivity(userId, 'social.post', 'feed_post', id);
