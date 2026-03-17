@@ -1,14 +1,18 @@
+// backend/src/routes/social.routes.ts
+
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import {
   getProfile, getMyProfile, createOrUpdateProfile, searchUsers,
   followUser, unfollowUser, getFollowers, getFollowing,
-  getFeed, getPublicFeed, createPost, deletePost,
+  getFeed, getPublicFeed, createPost, deletePost, uploadPostMedia,
   reactToPost, getComments, getReplies, addComment, deleteComment,
   getNotifications, markNotificationsRead, shareEntryToFeed,
 } from '../controllers/social.controller';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ── Profile ──────────────────────────────────────────────
 router.get('/profile/me', authenticate, getMyProfile);
@@ -24,9 +28,10 @@ router.delete('/follow/:username', authenticate, unfollowUser);
 
 // ── Feed ─────────────────────────────────────────────────
 router.get('/feed', authenticate, getFeed);
-router.get('/feed/public', getPublicFeed); // tidak perlu login
+router.get('/feed/public', getPublicFeed);
 router.post('/feed', authenticate, createPost);
 router.delete('/feed/:id', authenticate, deletePost);
+router.post('/feed/:id/media', authenticate, upload.array('files', 10), uploadPostMedia); // ← BARU
 
 // ── Share entry ke feed ───────────────────────────────────
 router.post('/feed/share/:entry_id', authenticate, shareEntryToFeed);

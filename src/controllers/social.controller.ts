@@ -4,12 +4,13 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import type { InValue } from '@libsql/client';
 import db from '../db/database';
+import { uploadToCloudinary } from '../services/cloudinary.service';
+import { compressImage } from '../services/compress.service';
 import { logActivity } from '../services/activity.service';
 import logger from '../services/logger.service';
 
 // ─── TYPE-SAFE HELPERS ────────────────────────────────────────────────────────
 
-// Untuk db.execute args — semua value jadi InValue
 const a = (v: unknown): InValue => {
   if (v === null || v === undefined) return null;
   if (typeof v === 'string') return v;
@@ -18,7 +19,6 @@ const a = (v: unknown): InValue => {
   return String(v);
 };
 
-// Untuk logActivity & fungsi lain yang butuh string murni
 const str = (v: unknown): string => {
   if (typeof v === 'string') return v;
   if (Array.isArray(v) && v.length > 0) return String(v[0]);
@@ -26,7 +26,6 @@ const str = (v: unknown): string => {
   return String(v);
 };
 
-// Safe cast req.query value ke string
 const qs = (v: unknown): string | undefined => {
   if (typeof v === 'string') return v;
   if (Array.isArray(v) && typeof v[0] === 'string') return v[0] as string;
@@ -83,10 +82,7 @@ export const createOrUpdateProfile = async (req: Request, res: Response): Promis
   });
   if (existing.rows.length > 0) { res.status(409).json({ error: 'Username sudah dipakai' }); return; }
 
-  const check = await db.execute({
-    sql: 'SELECT id FROM social_profiles WHERE user_id = ?',
-    args: [a(userId)]
-  });
+  const check = await db.execute({ sql: 'SELECT id FROM social_profiles WHERE user_id = ?', args: [a(userId)] });
 
   if (check.rows.length === 0) {
     await db.execute({
@@ -121,25 +117,13 @@ export const searchUsers = async (req: Request, res: Response): Promise<void> =>
 export const followUser = async (req: Request, res: Response): Promise<void> => {
   const followerId = str((req as any).user.id);
   const username = str(req.params.username);
-
-  const target = await db.execute({
-    sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
-    args: [a(username)]
-  });
+  const target = await db.execute({ sql: 'SELECT user_id FROM social_profiles WHERE username = ?', args: [a(username)] });
   if (target.rows.length === 0) { res.status(404).json({ error: 'User tidak ditemukan' }); return; }
-
   const followingId = str(target.rows[0].user_id);
   if (followerId === followingId) { res.status(400).json({ error: 'Tidak bisa follow diri sendiri' }); return; }
-
   try {
-    await db.execute({
-      sql: 'INSERT INTO follows (id, follower_id, following_id) VALUES (?, ?, ?)',
-      args: [a(uuidv4()), a(followerId), a(followingId)]
-    });
-    await db.execute({
-      sql: `INSERT INTO social_notifications (id, user_id, actor_id, type) VALUES (?, ?, ?, 'follow')`,
-      args: [a(uuidv4()), a(followingId), a(followerId)]
-    });
+    await db.execute({ sql: 'INSERT INTO follows (id, follower_id, following_id) VALUES (?, ?, ?)', args: [a(uuidv4()), a(followerId), a(followingId)] });
+    await db.execute({ sql: `INSERT INTO social_notifications (id, user_id, actor_id, type) VALUES (?, ?, ?, 'follow')`, args: [a(uuidv4()), a(followingId), a(followerId)] });
     await logActivity(followerId, 'social.follow', 'user', followingId);
     res.json({ message: 'Berhasil follow!' });
   } catch (e: any) {
@@ -151,33 +135,20 @@ export const followUser = async (req: Request, res: Response): Promise<void> => 
 export const unfollowUser = async (req: Request, res: Response): Promise<void> => {
   const followerId = str((req as any).user.id);
   const username = str(req.params.username);
-
-  const target = await db.execute({
-    sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
-    args: [a(username)]
-  });
+  const target = await db.execute({ sql: 'SELECT user_id FROM social_profiles WHERE username = ?', args: [a(username)] });
   if (target.rows.length === 0) { res.status(404).json({ error: 'User tidak ditemukan' }); return; }
-
   const followingId = str(target.rows[0].user_id);
-  await db.execute({
-    sql: 'DELETE FROM follows WHERE follower_id = ? AND following_id = ?',
-    args: [a(followerId), a(followingId)]
-  });
+  await db.execute({ sql: 'DELETE FROM follows WHERE follower_id = ? AND following_id = ?', args: [a(followerId), a(followingId)] });
   await logActivity(followerId, 'social.unfollow', 'user', followingId);
   res.json({ message: 'Berhasil unfollow!' });
 };
 
 export const getFollowers = async (req: Request, res: Response): Promise<void> => {
   const username = str(req.params.username);
-  const target = await db.execute({
-    sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
-    args: [a(username)]
-  });
+  const target = await db.execute({ sql: 'SELECT user_id FROM social_profiles WHERE username = ?', args: [a(username)] });
   if (target.rows.length === 0) { res.status(404).json({ error: 'User tidak ditemukan' }); return; }
   const result = await db.execute({
-    sql: `SELECT sp.username, sp.display_name, sp.avatar_url, sp.is_bot
-          FROM follows f JOIN social_profiles sp ON sp.user_id = f.follower_id
-          WHERE f.following_id = ? ORDER BY f.created_at DESC`,
+    sql: `SELECT sp.username, sp.display_name, sp.avatar_url, sp.is_bot FROM follows f JOIN social_profiles sp ON sp.user_id = f.follower_id WHERE f.following_id = ? ORDER BY f.created_at DESC`,
     args: [a(str(target.rows[0].user_id))]
   });
   res.json({ followers: result.rows });
@@ -185,15 +156,10 @@ export const getFollowers = async (req: Request, res: Response): Promise<void> =
 
 export const getFollowing = async (req: Request, res: Response): Promise<void> => {
   const username = str(req.params.username);
-  const target = await db.execute({
-    sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
-    args: [a(username)]
-  });
+  const target = await db.execute({ sql: 'SELECT user_id FROM social_profiles WHERE username = ?', args: [a(username)] });
   if (target.rows.length === 0) { res.status(404).json({ error: 'User tidak ditemukan' }); return; }
   const result = await db.execute({
-    sql: `SELECT sp.username, sp.display_name, sp.avatar_url, sp.is_bot
-          FROM follows f JOIN social_profiles sp ON sp.user_id = f.following_id
-          WHERE f.follower_id = ? ORDER BY f.created_at DESC`,
+    sql: `SELECT sp.username, sp.display_name, sp.avatar_url, sp.is_bot FROM follows f JOIN social_profiles sp ON sp.user_id = f.following_id WHERE f.follower_id = ? ORDER BY f.created_at DESC`,
     args: [a(str(target.rows[0].user_id))]
   });
   res.json({ following: result.rows });
@@ -214,8 +180,7 @@ export const getFeed = async (req: Request, res: Response): Promise<void> => {
               (SELECT COUNT(*) FROM comments WHERE post_id = fp.id) as comments_count,
               (SELECT type FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
             FROM feed_posts fp JOIN social_profiles sp ON sp.user_id = fp.user_id
-            WHERE (fp.user_id = ? OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?)
-              OR (fp.is_bot_post = 1 AND fp.visibility = 'public'))
+            WHERE (fp.user_id = ? OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?) OR (fp.is_bot_post = 1 AND fp.visibility = 'public'))
             AND fp.visibility != 'private' AND fp.created_at < ?
             ORDER BY fp.created_at DESC LIMIT ?`,
       args: [a(userId), a(userId), a(userId), a(cursor), a(limitNum)]
@@ -227,8 +192,7 @@ export const getFeed = async (req: Request, res: Response): Promise<void> => {
               (SELECT COUNT(*) FROM comments WHERE post_id = fp.id) as comments_count,
               (SELECT type FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
             FROM feed_posts fp JOIN social_profiles sp ON sp.user_id = fp.user_id
-            WHERE (fp.user_id = ? OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?)
-              OR (fp.is_bot_post = 1 AND fp.visibility = 'public'))
+            WHERE (fp.user_id = ? OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = ?) OR (fp.is_bot_post = 1 AND fp.visibility = 'public'))
             AND fp.visibility != 'private'
             ORDER BY fp.created_at DESC LIMIT ?`,
       args: [a(userId), a(userId), a(userId), a(limitNum)]
@@ -251,8 +215,7 @@ export const getPublicFeed = async (req: Request, res: Response): Promise<void> 
               (SELECT COUNT(*) FROM reactions WHERE post_id = fp.id) as reactions_count,
               (SELECT COUNT(*) FROM comments WHERE post_id = fp.id) as comments_count
             FROM feed_posts fp JOIN social_profiles sp ON sp.user_id = fp.user_id
-            WHERE fp.visibility = 'public' AND fp.created_at < ?
-            ORDER BY fp.created_at DESC LIMIT ?`,
+            WHERE fp.visibility = 'public' AND fp.created_at < ? ORDER BY fp.created_at DESC LIMIT ?`,
       args: [a(cursor), a(limitNum)]
     });
   } else {
@@ -261,8 +224,7 @@ export const getPublicFeed = async (req: Request, res: Response): Promise<void> 
               (SELECT COUNT(*) FROM reactions WHERE post_id = fp.id) as reactions_count,
               (SELECT COUNT(*) FROM comments WHERE post_id = fp.id) as comments_count
             FROM feed_posts fp JOIN social_profiles sp ON sp.user_id = fp.user_id
-            WHERE fp.visibility = 'public'
-            ORDER BY fp.created_at DESC LIMIT ?`,
+            WHERE fp.visibility = 'public' ORDER BY fp.created_at DESC LIMIT ?`,
       args: [a(limitNum)]
     });
   }
@@ -292,14 +254,67 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
   res.status(201).json({ message: 'Post berhasil dibuat!', post: parsePost(post.rows[0]) });
 };
 
-export const deletePost = async (req: Request, res: Response): Promise<void> => {
+// ─── UPLOAD MEDIA KE FEED POST ────────────────────────────────────────────────
+
+export const uploadPostMedia = async (req: Request, res: Response): Promise<void> => {
   const userId = str((req as any).user.id);
   const id = str(req.params.id);
 
-  const result = await db.execute({
+  const postResult = await db.execute({
     sql: 'SELECT * FROM feed_posts WHERE id = ? AND user_id = ?',
     args: [a(id), a(userId)]
   });
+
+  if (postResult.rows.length === 0) {
+    res.status(404).json({ error: 'Post tidak ditemukan' }); return;
+  }
+
+  const post = postResult.rows[0] as any;
+  const files = req.files as Express.Multer.File[];
+
+  if (!files || files.length === 0) {
+    res.status(400).json({ error: 'Tidak ada file yang diupload' }); return;
+  }
+
+  const uploaded: any[] = [];
+
+  for (const file of files) {
+    const subfolder = file.mimetype.startsWith('image/') ? 'photos'
+      : file.mimetype.startsWith('video/') ? 'videos'
+      : 'others';
+
+    try {
+      const { buffer } = await compressImage(file.buffer, file.mimetype);
+      const { fileId, webViewLink } = await uploadToCloudinary(buffer, subfolder);
+      uploaded.push({
+        fileId,
+        url: webViewLink,
+        type: subfolder,
+        name: file.originalname,
+        size: buffer.length,
+      });
+    } catch (err) {
+      logger.error('Post media upload failed', { userId, postId: id, filename: file.originalname, err });
+      throw err;
+    }
+  }
+
+  const existingMedia = JSON.parse((post.media as string) || '[]');
+  const newMedia = [...existingMedia, ...uploaded];
+  const now = new Date().toISOString();
+
+  await db.execute({
+    sql: 'UPDATE feed_posts SET media = ?, updated_at = ? WHERE id = ?',
+    args: [a(JSON.stringify(newMedia)), a(now), a(id)]
+  });
+
+  res.json({ message: 'Media berhasil diupload!', media: newMedia });
+};
+
+export const deletePost = async (req: Request, res: Response): Promise<void> => {
+  const userId = str((req as any).user.id);
+  const id = str(req.params.id);
+  const result = await db.execute({ sql: 'SELECT * FROM feed_posts WHERE id = ? AND user_id = ?', args: [a(id), a(userId)] });
   if (result.rows.length === 0) { res.status(404).json({ error: 'Post tidak ditemukan' }); return; }
   await db.execute({ sql: 'DELETE FROM comments WHERE post_id = ?', args: [a(id)] });
   await db.execute({ sql: 'DELETE FROM reactions WHERE post_id = ?', args: [a(id)] });
@@ -314,15 +329,9 @@ export const reactToPost = async (req: Request, res: Response): Promise<void> =>
   const userId = str((req as any).user.id);
   const id = str(req.params.id);
   const type = str(req.body.type) || 'like';
-
   const post = await db.execute({ sql: 'SELECT * FROM feed_posts WHERE id = ?', args: [a(id)] });
   if (post.rows.length === 0) { res.status(404).json({ error: 'Post tidak ditemukan' }); return; }
-
-  const existing = await db.execute({
-    sql: 'SELECT * FROM reactions WHERE user_id = ? AND post_id = ?',
-    args: [a(userId), a(id)]
-  });
-
+  const existing = await db.execute({ sql: 'SELECT * FROM reactions WHERE user_id = ? AND post_id = ?', args: [a(userId), a(id)] });
   if (existing.rows.length > 0) {
     if ((existing.rows[0] as any).type === type) {
       await db.execute({ sql: 'DELETE FROM reactions WHERE user_id = ? AND post_id = ?', args: [a(userId), a(id)] });
@@ -332,17 +341,10 @@ export const reactToPost = async (req: Request, res: Response): Promise<void> =>
       res.json({ message: 'Reaction diupdate', reacted: true, type }); return;
     }
   }
-
-  await db.execute({
-    sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)',
-    args: [a(uuidv4()), a(userId), a(id), a(type)]
-  });
+  await db.execute({ sql: 'INSERT INTO reactions (id, user_id, post_id, type) VALUES (?, ?, ?, ?)', args: [a(uuidv4()), a(userId), a(id), a(type)] });
   const postOwnerId = str(post.rows[0].user_id);
   if (postOwnerId !== userId) {
-    await db.execute({
-      sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id) VALUES (?, ?, ?, 'reaction', ?)`,
-      args: [a(uuidv4()), a(postOwnerId), a(userId), a(id)]
-    });
+    await db.execute({ sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id) VALUES (?, ?, ?, 'reaction', ?)`, args: [a(uuidv4()), a(postOwnerId), a(userId), a(id)] });
   }
   await logActivity(userId, 'social.react', 'feed_post', id);
   res.json({ message: 'Reaction ditambahkan!', reacted: true, type });
@@ -365,9 +367,7 @@ export const getComments = async (req: Request, res: Response): Promise<void> =>
 export const getReplies = async (req: Request, res: Response): Promise<void> => {
   const commentId = str(req.params.commentId);
   const result = await db.execute({
-    sql: `SELECT c.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot
-          FROM comments c JOIN social_profiles sp ON sp.user_id = c.user_id
-          WHERE c.parent_id = ? ORDER BY c.created_at ASC`,
+    sql: `SELECT c.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot FROM comments c JOIN social_profiles sp ON sp.user_id = c.user_id WHERE c.parent_id = ? ORDER BY c.created_at ASC`,
     args: [a(commentId)]
   });
   res.json({ replies: result.rows });
@@ -378,42 +378,29 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
   const id = str(req.params.id);
   const content = str(req.body.content);
   const parentId = req.body.parent_id ? str(req.body.parent_id) : null;
-
   if (!content) { res.status(400).json({ error: 'Komentar tidak boleh kosong' }); return; }
-
   const post = await db.execute({ sql: 'SELECT * FROM feed_posts WHERE id = ?', args: [a(id)] });
   if (post.rows.length === 0) { res.status(404).json({ error: 'Post tidak ditemukan' }); return; }
-
   const commentId = uuidv4();
   const now = new Date().toISOString();
   await db.execute({
     sql: `INSERT INTO comments (id, user_id, post_id, content, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
     args: [a(commentId), a(userId), a(id), a(content), a(parentId), a(now)]
   });
-
   const postOwnerId = str(post.rows[0].user_id);
   if (postOwnerId !== userId) {
-    await db.execute({
-      sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id, comment_id) VALUES (?, ?, ?, 'comment', ?, ?)`,
-      args: [a(uuidv4()), a(postOwnerId), a(userId), a(id), a(commentId)]
-    });
+    await db.execute({ sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id, comment_id) VALUES (?, ?, ?, 'comment', ?, ?)`, args: [a(uuidv4()), a(postOwnerId), a(userId), a(id), a(commentId)] });
   }
-
   if (parentId) {
     const parentComment = await db.execute({ sql: 'SELECT user_id FROM comments WHERE id = ?', args: [a(parentId)] });
     const parentOwnerId = parentComment.rows[0] ? str(parentComment.rows[0].user_id) : null;
     if (parentOwnerId && parentOwnerId !== userId) {
-      await db.execute({
-        sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id, comment_id) VALUES (?, ?, ?, 'reply', ?, ?)`,
-        args: [a(uuidv4()), a(parentOwnerId), a(userId), a(id), a(commentId)]
-      });
+      await db.execute({ sql: `INSERT INTO social_notifications (id, user_id, actor_id, type, post_id, comment_id) VALUES (?, ?, ?, 'reply', ?, ?)`, args: [a(uuidv4()), a(parentOwnerId), a(userId), a(id), a(commentId)] });
     }
   }
-
   await logActivity(userId, 'social.comment', 'feed_post', id);
   const comment = await db.execute({
-    sql: `SELECT c.*, sp.username, sp.display_name, sp.avatar_url
-          FROM comments c JOIN social_profiles sp ON sp.user_id = c.user_id WHERE c.id = ?`,
+    sql: `SELECT c.*, sp.username, sp.display_name, sp.avatar_url FROM comments c JOIN social_profiles sp ON sp.user_id = c.user_id WHERE c.id = ?`,
     args: [a(commentId)]
   });
   res.status(201).json({ message: 'Komentar ditambahkan!', comment: comment.rows[0] });
@@ -422,11 +409,7 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
 export const deleteComment = async (req: Request, res: Response): Promise<void> => {
   const userId = str((req as any).user.id);
   const commentId = str(req.params.commentId);
-
-  const result = await db.execute({
-    sql: 'SELECT * FROM comments WHERE id = ? AND user_id = ?',
-    args: [a(commentId), a(userId)]
-  });
+  const result = await db.execute({ sql: 'SELECT * FROM comments WHERE id = ? AND user_id = ?', args: [a(commentId), a(userId)] });
   if (result.rows.length === 0) { res.status(404).json({ error: 'Komentar tidak ditemukan' }); return; }
   await db.execute({ sql: 'DELETE FROM comments WHERE parent_id = ?', args: [a(commentId)] });
   await db.execute({ sql: 'DELETE FROM comments WHERE id = ?', args: [a(commentId)] });
@@ -439,9 +422,7 @@ export const deleteComment = async (req: Request, res: Response): Promise<void> 
 export const getNotifications = async (req: Request, res: Response): Promise<void> => {
   const userId = str((req as any).user.id);
   const result = await db.execute({
-    sql: `SELECT sn.*, sp.username as actor_username, sp.display_name as actor_display_name, sp.avatar_url as actor_avatar
-          FROM social_notifications sn JOIN social_profiles sp ON sp.user_id = sn.actor_id
-          WHERE sn.user_id = ? ORDER BY sn.created_at DESC LIMIT 50`,
+    sql: `SELECT sn.*, sp.username as actor_username, sp.display_name as actor_display_name, sp.avatar_url as actor_avatar FROM social_notifications sn JOIN social_profiles sp ON sp.user_id = sn.actor_id WHERE sn.user_id = ? ORDER BY sn.created_at DESC LIMIT 50`,
     args: [a(userId)]
   });
   res.json({ notifications: result.rows });
@@ -459,13 +440,8 @@ export const shareEntryToFeed = async (req: Request, res: Response): Promise<voi
   const userId = str((req as any).user.id);
   const entryId = str(req.params.entry_id);
   const visibility = str(req.body.visibility) || 'public';
-
-  const entry = await db.execute({
-    sql: 'SELECT * FROM entries WHERE id = ? AND user_id = ?',
-    args: [a(entryId), a(userId)]
-  });
+  const entry = await db.execute({ sql: 'SELECT * FROM entries WHERE id = ? AND user_id = ?', args: [a(entryId), a(userId)] });
   if (entry.rows.length === 0) { res.status(404).json({ error: 'Entry tidak ditemukan' }); return; }
-
   const e = entry.rows[0] as any;
   const id = uuidv4();
   const now = new Date().toISOString();
