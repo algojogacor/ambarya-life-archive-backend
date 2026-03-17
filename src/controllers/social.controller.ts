@@ -456,3 +456,34 @@ export const shareEntryToFeed = async (req: Request, res: Response): Promise<voi
   await logActivity(userId, 'social.post', 'feed_post', id);
   res.status(201).json({ message: 'Entry berhasil di-share ke feed!' });
 };
+
+export const getProfilePosts = async (req: Request, res: Response): Promise<void> => {
+  const username = str(req.params.username);
+  const viewerId = (req as any).user?.id ? str((req as any).user.id) : null;
+
+  const profile = await db.execute({
+    sql: 'SELECT user_id FROM social_profiles WHERE username = ?',
+    args: [a(username)],
+  });
+  if (profile.rows.length === 0) {
+    res.status(404).json({ error: 'Profil tidak ditemukan' });
+    return;
+  }
+
+  const ownerId = str(profile.rows[0].user_id);
+
+  const result = await db.execute({
+    sql: `SELECT fp.*, sp.username, sp.display_name, sp.avatar_url, sp.is_bot,
+            (SELECT COUNT(*) FROM reactions WHERE post_id = fp.id) as reactions_count,
+            (SELECT COUNT(*) FROM comments  WHERE post_id = fp.id) as comments_count,
+            (SELECT type    FROM reactions WHERE post_id = fp.id AND user_id = ?) as my_reaction
+          FROM feed_posts fp
+          JOIN social_profiles sp ON sp.user_id = fp.user_id
+          WHERE fp.user_id = ? AND fp.visibility = 'public'
+          ORDER BY fp.created_at DESC
+          LIMIT 50`,
+    args: [a(viewerId), a(ownerId)],
+  });
+
+  res.json({ posts: result.rows.map(parsePost) });
+};

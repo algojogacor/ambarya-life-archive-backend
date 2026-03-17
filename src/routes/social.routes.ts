@@ -9,6 +9,7 @@ import {
   getFeed, getPublicFeed, createPost, deletePost, uploadPostMedia,
   reactToPost, getComments, getReplies, addComment, deleteComment,
   getNotifications, markNotificationsRead, shareEntryToFeed,
+  getProfilePosts, 
 } from '../controllers/social.controller';
 import { getExploreFeed, getTrendingPosts } from '../controllers/explore.controller';
 import { updateProfile, uploadAvatar } from '../controllers/profile.controller';
@@ -25,6 +26,7 @@ router.post('/profile/avatar',               authenticate, avatarUpload.single('
 router.get('/profile/:username',             authenticate,                                 getProfile);
 router.get('/profile/:username/followers',   authenticate,                                 getFollowers);
 router.get('/profile/:username/following',   authenticate,                                 getFollowing);
+router.get('/profile/:username/posts', authenticate, getProfilePosts);
 
 // ── Search ────────────────────────────────────────────────
 router.get('/users/search',                  authenticate, searchUsers);
