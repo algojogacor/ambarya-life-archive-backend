@@ -20,7 +20,14 @@ export const getOrCreateStreak = async (userId: string) => {
   });
 
   if (result.rows.length > 0) {
-    return result.rows[0];
+    // Normalize types
+    const row = result.rows[0];
+    return {
+      ...row,
+      current_streak: Number(row.current_streak ?? 0),
+      longest_streak: Number(row.longest_streak ?? 0),
+      last_activity_date: row.last_activity_date ? String(row.last_activity_date) : null,
+    };
   }
 
   // Create new streak record
@@ -51,18 +58,18 @@ export const recordActivity = async (userId: string) => {
     return streak; // Already recorded today, no change
   }
 
-  const lastDate = streak.last_activity_date ? new Date(streak.last_activity_date) : null;
+  const lastDate = streak.last_activity_date ? new Date(String(streak.last_activity_date)) : null;
   const todayDate = new Date(today);
-  
-  let newStreak = streak.current_streak;
-  let newLongest = streak.longest_streak;
+
+  let newStreak = Number(streak.current_streak ?? 0);
+  let newLongest = Number(streak.longest_streak ?? 0);
 
   if (lastDate) {
     const daysDiff = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (daysDiff === 1) {
       // Consecutive day - increment streak
-      newStreak = streak.current_streak + 1;
+      newStreak = Number(streak.current_streak ?? 0) + 1;
     } else if (daysDiff > 1) {
       // Gap detected - reset streak
       newStreak = 1;
@@ -74,7 +81,7 @@ export const recordActivity = async (userId: string) => {
   }
 
   // Update longest streak if new streak is greater
-  if (newStreak > streak.longest_streak) {
+  if (newStreak > newLongest) {
     newLongest = newStreak;
   }
 
@@ -108,9 +115,9 @@ export const checkAndResetStreaks = async () => {
   // Reset streaks for users who didn't activity yesterday
   for (const row of result.rows) {
     // Only reset if last activity was more than 1 day ago
-    const lastDate = new Date(String(row.last_activity_date));
+    const lastDate = row.last_activity_date ? new Date(String(row.last_activity_date)) : null;
+    if (!lastDate) continue;
     const daysDiff = Math.floor((new Date().getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-    
     if (daysDiff > 1) {
       await db.execute({
         sql: 'UPDATE streaks SET current_streak = 0 WHERE id = ?',
@@ -130,6 +137,11 @@ export const getUserStreak = async (userId: string) => {
   if (result.rows.length === 0) {
     return await getOrCreateStreak(userId);
   }
-
-  return result.rows[0];
+  const row = result.rows[0];
+  return {
+    ...row,
+    current_streak: Number(row.current_streak ?? 0),
+    longest_streak: Number(row.longest_streak ?? 0),
+    last_activity_date: row.last_activity_date ? String(row.last_activity_date) : null,
+  };
 };
