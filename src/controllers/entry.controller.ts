@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db/database';
-import { uploadToCloudinary } from '../services/cloudinary.service';
+import { uploadToCloudinary, deleteFromCloudinary } from '../services/cloudinary.service';
 import bcrypt from 'bcryptjs';
 import { compressImage } from '../services/compress.service';
 import { logActivity } from '../services/activity.service';
@@ -129,23 +129,29 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
   const uploaded: any[] = [];
 
   for (const file of files) {
-    const subfolder = file.mimetype.startsWith('image/') ? 'photos'
-      : file.mimetype.startsWith('video/') ? 'videos'
-      : file.mimetype.startsWith('audio/') ? 'voices'
-      : 'others';
+  const subfolder = file.mimetype.startsWith('image/') ? 'photos'
+    : file.mimetype.startsWith('video/') ? 'videos'
+    : file.mimetype.startsWith('audio/') ? 'voices'
+    : 'others';
 
-    try {
-      const { buffer, mimeType } = await compressImage(file.buffer, file.mimetype);
-      const ext = mimeType === 'image/webp' ? 'webp' : file.originalname.split('.').pop();
-      const filename = `${uuidv4()}_${file.originalname.replace(/\.[^.]+$/, '')}.${ext}`;
-      const { fileId, webViewLink } = await uploadToCloudinary(req.file.buffer, 'photos');
+  try {
+    // 1. Kompres gambar jika itu foto
+    const { buffer, mimeType } = await compressImage(file.buffer, file.mimetype);
+    
+    // 2. Upload HASIL KOMPRESI (buffer) ke Cloudinary
+    // Gunakan 'buffer' bukan 'req.file.buffer'
+    const { fileId, webViewLink } = await uploadToCloudinary(buffer, subfolder);
 
-      uploaded.push({
-        fileId, url: webViewLink, type: subfolder,
-        name: file.originalname, originalSize: file.size,
-        size: buffer.length, compressed: buffer.length < file.size,
-      });
-    } catch (err) {
+    uploaded.push({
+      fileId, 
+      url: webViewLink, 
+      type: subfolder,
+      name: file.originalname, 
+      originalSize: file.size,
+      size: buffer.length, 
+      compressed: buffer.length < file.size,
+    });
+  } catch (err) {
       await logActivity(userId, 'media.upload_failed', 'entry', id, { filename: file.originalname });
       logger.error('Media upload failed', { userId, entryId: id, filename: file.originalname, err });
       throw err;
@@ -261,8 +267,17 @@ export const deleteEntry = async (req: Request, res: Response): Promise<void> =>
   const media = JSON.parse((entry.media as string) || '[]');
 
   for (const m of media) {
-    try { await deleteFile(m.fileId); } catch {}
+    try { 
+      // Gunakan fungsi delete dari service Cloudinary
+      if (m.fileId) {
+        await deleteFromCloudinary(m.fileId); 
+      }
+    } catch (err) {
+      // Kita log saja kalau gagal, agar proses hapus DB tetap jalan
+      logger.error('Gagal menghapus media di Cloudinary saat delete entry', { fileId: m.fileId, err });
+    }
   }
+  // --------------------------
 
   await db.execute({ sql: 'DELETE FROM entry_versions WHERE entry_id = ?', args: [id] });
   await db.execute({ sql: 'DELETE FROM entries WHERE id = ?', args: [id] });
@@ -271,7 +286,6 @@ export const deleteEntry = async (req: Request, res: Response): Promise<void> =>
   logger.info('Entry deleted', { userId, entryId: id });
   res.json({ message: 'Entry berhasil dihapus!' });
 };
-
 export const getOnThisDay = async (req: Request, res: Response): Promise<void> => {
   const userId = (req as any).user.id;
   const today = new Date();
