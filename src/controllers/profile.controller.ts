@@ -67,7 +67,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     });
   }
 
-  await logActivity(userId, 'profile.update', 'social_profile', userId);
+await logActivity(userId, 'profile.update' as any, 'social_profile', userId);
 
   const updated = await db.execute({
     sql: `SELECT sp.*, u.name, u.email,
@@ -127,7 +127,7 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<void> =
       args: [a(webViewLink), a(userId)],
     });
 
-    await logActivity(userId, 'profile.avatar_update', 'social_profile', userId);
+await logActivity(userId, 'profile.avatar_update' as any, 'social_profile', userId);
     logger.info('Avatar updated', { userId, fileId });
 
     // Hapus avatar lama dari Cloudinary (best-effort, tidak throw kalau gagal)
