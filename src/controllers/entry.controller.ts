@@ -129,29 +129,25 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
   const uploaded: any[] = [];
 
   for (const file of files) {
-  const subfolder = file.mimetype.startsWith('image/') ? 'photos'
-    : file.mimetype.startsWith('video/') ? 'videos'
-    : file.mimetype.startsWith('audio/') ? 'voices'
-    : 'others';
+    const subfolder = file.mimetype.startsWith('image/') ? 'photos'
+      : file.mimetype.startsWith('video/') ? 'videos'
+      : file.mimetype.startsWith('audio/') ? 'voices'
+      : 'others';
 
-  try {
-    // 1. Kompres gambar jika itu foto
-    const { buffer, mimeType } = await compressImage(file.buffer, file.mimetype);
-    
-    // 2. Upload HASIL KOMPRESI (buffer) ke Cloudinary
-    // Gunakan 'buffer' bukan 'req.file.buffer'
-    const { fileId, webViewLink } = await uploadToCloudinary(buffer, subfolder);
+    try {
+      const { buffer, mimeType } = await compressImage(file.buffer, file.mimetype);
+      const { fileId, webViewLink } = await uploadToCloudinary(buffer, subfolder);
 
-    uploaded.push({
-      fileId, 
-      url: webViewLink, 
-      type: subfolder,
-      name: file.originalname, 
-      originalSize: file.size,
-      size: buffer.length, 
-      compressed: buffer.length < file.size,
-    });
-  } catch (err) {
+      uploaded.push({
+        fileId,
+        url: webViewLink,
+        type: subfolder,
+        name: file.originalname,
+        originalSize: file.size,
+        size: buffer.length,
+        compressed: buffer.length < file.size,
+      });
+    } catch (err) {
       await logActivity(userId, 'media.upload_failed', 'entry', id, { filename: file.originalname });
       logger.error('Media upload failed', { userId, entryId: id, filename: file.originalname, err });
       throw err;
@@ -161,10 +157,12 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
   const existingMedia = JSON.parse((entry.media as string) || '[]');
   const newMedia = [...existingMedia, ...uploaded];
 
+  const now = new Date().toISOString();
   await db.execute({
-  sql: 'UPDATE entries SET media = ?, updated_at = datetime("now") WHERE id = ?', // Benar
-  args: [JSON.stringify(newMedia), id]
-});
+    sql: 'UPDATE entries SET media = ?, updated_at = ? WHERE id = ?',
+    args: [JSON.stringify(newMedia), now, id]
+  });
+
   await logActivity(userId, 'media.upload', 'entry', id, { count: uploaded.length });
   res.json({ message: 'Media berhasil diupload!', media: newMedia });
 };
@@ -209,6 +207,7 @@ export const updateEntry = async (req: Request, res: Response): Promise<void> =>
     step_count, energy_level, sleep_hours,
   } = req.body;
 
+  const now = new Date().toISOString();
   await db.execute({
     sql: `UPDATE entries SET
       title = COALESCE(?, title),
@@ -228,7 +227,7 @@ export const updateEntry = async (req: Request, res: Response): Promise<void> =>
       step_count = COALESCE(?, step_count),
       energy_level = COALESCE(?, energy_level),
       sleep_hours = COALESCE(?, sleep_hours),
-      updated_at = datetime('now')
+      updated_at = ?
     WHERE id = ? AND user_id = ?`,
     args: [
       title || null, content || null, mood || null, mood_label || null,
@@ -238,7 +237,7 @@ export const updateEntry = async (req: Request, res: Response): Promise<void> =>
       music_title || null, music_artist || null,
       music_album_art || null, music_preview_url || null, music_itunes_url || null,
       step_count || null, energy_level || null, sleep_hours || null,
-      id, userId
+      now, id, userId
     ]
   });
 
@@ -266,17 +265,14 @@ export const deleteEntry = async (req: Request, res: Response): Promise<void> =>
   const media = JSON.parse((entry.media as string) || '[]');
 
   for (const m of media) {
-    try { 
-      // Gunakan fungsi delete dari service Cloudinary
+    try {
       if (m.fileId) {
-        await deleteFromCloudinary(m.fileId); 
+        await deleteFromCloudinary(m.fileId);
       }
     } catch (err) {
-      // Kita log saja kalau gagal, agar proses hapus DB tetap jalan
       logger.error('Gagal menghapus media di Cloudinary saat delete entry', { fileId: m.fileId, err });
     }
   }
-  // --------------------------
 
   await db.execute({ sql: 'DELETE FROM entry_versions WHERE entry_id = ?', args: [id] });
   await db.execute({ sql: 'DELETE FROM entries WHERE id = ?', args: [id] });
@@ -285,6 +281,7 @@ export const deleteEntry = async (req: Request, res: Response): Promise<void> =>
   logger.info('Entry deleted', { userId, entryId: id });
   res.json({ message: 'Entry berhasil dihapus!' });
 };
+
 export const getOnThisDay = async (req: Request, res: Response): Promise<void> => {
   const userId = (req as any).user.id;
   const today = new Date();
@@ -408,9 +405,10 @@ export const rollbackVersion = async (req: Request, res: Response): Promise<void
 
   const version = result.rows[0] as any;
 
+  const now = new Date().toISOString();
   await db.execute({
-    sql: `UPDATE entries SET title = ?, content = ?, mood = ?, mood_label = ?, tags = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`,
-    args: [version.title, version.content, version.mood, version.mood_label, version.tags, id, userId]
+    sql: `UPDATE entries SET title = ?, content = ?, mood = ?, mood_label = ?, tags = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+    args: [version.title, version.content, version.mood, version.mood_label, version.tags, now, id, userId]
   });
 
   await logActivity(userId, 'entry.update', 'entry', id, { rollback_to_version: version.version_number });
