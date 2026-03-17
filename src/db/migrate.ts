@@ -134,6 +134,16 @@ export const runMigrations = async () => {
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (bot_id) REFERENCES bots(id)
     )`,
+    `CREATE TABLE IF NOT EXISTS streaks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT UNIQUE NOT NULL,
+      current_streak INTEGER DEFAULT 0,
+      longest_streak INTEGER DEFAULT 0,
+      last_activity_date TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
+    `ALTER TABLE users ADD COLUMN avatar_url TEXT`,
   ];
 
   for (const sql of migrations) {

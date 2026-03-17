@@ -10,6 +10,7 @@ import {
   reactToPost, getComments, getReplies, addComment, deleteComment,
   getNotifications, markNotificationsRead, shareEntryToFeed,
 } from '../controllers/social.controller';
+import { editProfile, uploadAvatar } from '../controllers/profile.controller';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -21,6 +22,8 @@ router.get('/profile/:username', authenticate, getProfile);
 router.get('/profile/:username/followers', authenticate, getFollowers);
 router.get('/profile/:username/following', authenticate, getFollowing);
 router.get('/users/search', authenticate, searchUsers);
+router.post('/profile/edit', authenticate, editProfile);
+router.post('/profile/avatar', authenticate, upload.single('file'), uploadAvatar);
 
 // ── Follow ───────────────────────────────────────────────
 router.post('/follow/:username', authenticate, followUser);

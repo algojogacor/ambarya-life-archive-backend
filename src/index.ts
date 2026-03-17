@@ -8,6 +8,8 @@ import extraRoutes from './routes/extra.routes';
 import waRoutes from './routes/wa.routes';
 import socialRoutes from './routes/social.routes';
 import servicesRoutes from './routes/services.routes';
+import streakRoutes from './routes/streak.routes';
+import exploreRoutes from './routes/explore.routes';
 import { initCronJobs } from './services/cron.service';
 import { runMigrations } from './db/migrate';
 import logger from './services/logger.service';
@@ -47,6 +49,8 @@ app.use('/api/social', socialRoutes);
 app.use('/api', extraRoutes);
 app.use('/api', waRoutes);
 app.use('/api', servicesRoutes);
+app.use('/api/streak', streakRoutes);
+app.use('/api/explore', exploreRoutes);
 
 const start = async () => {
   try {
