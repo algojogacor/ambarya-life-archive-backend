@@ -97,7 +97,7 @@ export const getConfessFeed = async (req: Request, res: Response): Promise<void>
  */
 export const getConfessDetail = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id }  = req.params;
+    const id      = str(req.params.id);
     const userId  = (req as any).user?.id ? str((req as any).user.id) : null;
 
     const result = await db.execute({
@@ -199,7 +199,7 @@ export const submitConfess = async (req: Request, res: Response): Promise<void> 
 export const toggleRelate = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId    = str((req as any).user.id);
-    const { id }    = req.params;
+    const id        = str(req.params.id);
 
     // Cek post ada
     const postCheck = await db.execute({
@@ -261,7 +261,7 @@ export const toggleRelate = async (req: Request, res: Response): Promise<void> =
  */
 export const getConfessComments = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = str(req.params.id);
 
     const result = await db.execute({
       sql: `SELECT
@@ -305,8 +305,8 @@ export const getConfessComments = async (req: Request, res: Response): Promise<v
  */
 export const addConfessComment = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId     = str((req as any).user.id);
-    const { id }     = req.params;
+    const userId      = str((req as any).user.id);
+    const id          = str(req.params.id);
     const { content } = req.body;
 
     if (!content || content.trim().length < 1) {
