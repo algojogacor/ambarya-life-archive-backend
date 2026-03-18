@@ -125,9 +125,9 @@ export const generateDisplayName = (realName: string): string => {
 };
 
 const BOT_NAME_POOL = [
-  'Jihan', 'Reza', 'Nadia', 'Sari', 'Dika', 'Maya', 'Fariz', 'Lina',
+  'Arya', 'Reza', 'Nadia', 'Sari', 'Dika', 'Maya', 'Fariz', 'Lina',
   'Budi', 'Citra', 'Hendra', 'Putri', 'Yoga', 'Dewi', 'Andi', 'Nurul',
-  'Galih', 'Arin', 'Rizky', 'Ayu', 'Bagas', 'Charmaadiaa', 'Wahyu', 'Rina',
+  'Galih', 'Tio', 'Rizky', 'Ayu', 'Bagas', 'Shinta', 'Wahyu', 'Rina',
   'Hafiz', 'Salma', 'Kevin', 'Tania', 'Faris', 'Mira',
 ];
 
@@ -139,60 +139,94 @@ export const generateBotDisplayName = (): string => {
 // ─── BOT PROMPT POOL ──────────────────────────────────────────────────────────
 
 const BOT_CONFESS_PROMPTS = [
-  // 💔 Deep Emotion (refined)
-  'Tulis tentang perasaan ketika kamu merasa tidak benar-benar dimengerti oleh siapapun.',
-  'Tulis momen ketika kamu tersenyum di luar, tapi sebenarnya sedang hancur di dalam.',
-  'Tulis tentang seseorang yang masih punya tempat di hati, meskipun sudah tidak ada di hidupmu.',
-  'Tulis tentang rasa lelah yang tidak bisa dijelaskan dengan kata-kata.',
-  'Tulis tentang hal yang paling ingin kamu dengar dari seseorang, tapi tidak pernah kamu dapatkan.',
+  // 💔 Deep Emotion
+  'Tulis cerita pendek tentang momen kamu merasa nggak benar-benar dimengerti. Jangan terlalu rapi—biarkan ceritanya agak loncat-loncat, seperti orang yang lagi curhat. Tambahkan detail kecil (tempat, suasana, atau kejadian spesifik). Gunakan kata ganti orang pertama yang terasa paling natural buat karakter ini—boleh gue, aku, saya, aing, atau lainnya.',
+
+  'Ceritakan momen ketika kamu terlihat baik-baik saja di depan orang lain, tapi sebenarnya lagi kacau. Jangan langsung jelaskan perasaanmu—tunjukkan lewat kejadian atau kebiasaan kecil. Boleh pakai bahasa santai campur formal, sesuaikan saja.',
+
+  'Tulis tentang seseorang yang masih kamu pikirkan sampai sekarang. Jangan terlalu jelas menjelaskan kenapa—biarkan sebagian terasa "nggantung" seperti perasaan yang belum selesai. Gunakan kata ganti yang paling pas buat nada ceritanya.',
+
+  'Ceritakan rasa lelah yang kamu rasakan, tapi bukan dengan kata "lelah". Gambarkan lewat hal-hal kecil yang kamu lakukan atau rasakan sehari-hari. Bisa pakai gue, aku, atau bahkan saya kalau nadanya lebih formal.',
+
+  'Tulis tentang sesuatu yang ingin banget kamu dengar dari seseorang, tapi nggak pernah kamu dapatkan. Buat seolah-olah kamu lagi ngomong ke diri sendiri. Pilih kata ganti yang terasa paling jujur.',
 
   // 🧠 Self Reflection
-  'Tulis tentang versi dirimu yang dulu — apa yang berubah, dan kenapa?',
-  'Tulis kebiasaan yang diam-diam merusak dirimu sendiri.',
-  'Tulis tentang hal yang sering kamu hindari, padahal kamu tahu itu penting.',
-  'Tulis tentang keputusan yang paling membentuk dirimu hari ini.',
-  'Tulis tentang ketakutan terbesar yang sebenarnya mengendalikan hidupmu.',
+  'Tulis tentang dirimu yang dulu, tapi dengan gaya santai seolah kamu lagi ngobrol sendiri. Boleh ada kebingungan atau keraguan, nggak harus semuanya jelas. Bebas pakai gue, aku, atau apapun yang cocok.',
+
+  'Ceritakan kebiasaan buruk yang kamu tahu nggak baik, tapi masih kamu lakukan. Tambahkan alasan yang jujur, walaupun terdengar "jelek". Gunakan bahasa sehari-hari yang natural.',
+
+  'Tulis tentang sesuatu yang sering kamu hindari. Jangan langsung bilang takut, tapi tunjukkan lewat tindakan atau keputusanmu. Boleh campur bahasa gaul dan formal.',
+
+  'Ceritakan satu keputusan yang masih kamu pikirkan sampai sekarang. Biarkan ceritanya sedikit berantakan dan nggak harus ada kesimpulan. Pilih kata ganti yang terasa paling pas.',
+
+  'Tulis tentang hal yang sebenarnya paling kamu takutkan, tapi dengan gaya seolah kamu belum sepenuhnya mau mengakuinya. Bebas dalam pilihan kata dan kata ganti.',
 
   // 🫂 Healing & Release
-  'Tulis semua hal yang ingin kamu katakan ke seseorang, tanpa harus menahannya lagi.',
-  'Tulis tentang sesuatu yang ingin kamu maafkan — entah orang lain, atau dirimu sendiri.',
-  'Tulis tentang hal yang sudah lama kamu pendam dan akhirnya ingin kamu lepaskan.',
-  'Tulis tentang luka lama yang masih terasa sampai sekarang.',
-  'Tulis tentang apa yang sebenarnya kamu butuhkan saat ini, bukan yang orang lain harapkan.',
+  'Tulis seolah kamu lagi menulis pesan yang tidak akan pernah dikirim ke seseorang. Bebas, jujur, dan nggak perlu disusun rapi. Gunakan kata ganti yang paling terasa "kamu banget"—gue, aku, saya, aing.',
+
+  'Ceritakan sesuatu yang ingin kamu maafkan, tapi kamu sendiri masih ragu. Boleh ada konflik dalam pikiranmu. Bahasa bebas, campur-campur oke.',
+
+  'Tulis tentang hal yang sudah lama kamu pendam. Jangan langsung ke inti—biarkan ceritanya pelan-pelan terbuka. Pilih gaya bahasa yang paling terasa natural.',
+
+  'Ceritakan luka lama tanpa menyebutnya secara langsung. Gunakan kejadian atau kenangan kecil sebagai pengganti. Kata ganti bebas.',
+
+  'Tulis tentang apa yang sebenarnya kamu butuhkan saat ini, tapi dengan gaya seolah kamu sendiri juga belum yakin. Boleh formal, boleh santai.',
 
   // 🌱 Growth & Direction
-  'Tulis tentang kehidupan yang sebenarnya ingin kamu jalani.',
-  'Tulis langkah kecil apa yang bisa kamu lakukan besok untuk jadi lebih baik.',
-  'Tulis tentang hal yang ingin kamu ubah dari hidupmu, tapi belum berani mulai.',
-  'Tulis tentang versi terbaik dirimu di masa depan.',
-  'Tulis tentang satu hal yang bisa kamu syukuri hari ini, sekecil apapun itu.',
+  'Tulis tentang kehidupan yang kamu inginkan, tapi sertakan juga keraguan kenapa kamu belum sampai ke sana. Gunakan kata ganti yang paling cocok—tidak harus aku terus.',
 
-  // ⚡ Contrast Emotion (ini powerful banget)
-  'Tulis tentang hal yang membuatmu bahagia hari ini, meskipun harimu berat.',
-  'Tulis tentang momen kecil yang sebenarnya berarti besar.',
-  'Tulis tentang sesuatu yang dulu kamu anggap masalah, tapi sekarang kamu syukuri.',
-  'Tulis tentang orang yang diam-diam selalu ada untukmu.',
-  'Tulis tentang alasan kenapa kamu masih bertahan sampai hari ini.',
+  'Ceritakan satu langkah kecil yang sebenarnya bisa kamu lakukan, tapi entah kenapa selalu kamu tunda. Bahasa bebas, sesantai yang dirasa pas.',
+
+  'Tulis tentang perubahan yang kamu inginkan, tapi jujur juga tentang rasa malas atau takutmu. Boleh pakai gue, aku, saya, aing, atau lainnya.',
+
+  'Bayangkan versi dirimu di masa depan, tapi buat terasa realistis—nggak perlu sempurna. Pilih kata ganti yang bikin ceritanya lebih hidup.',
+
+  'Tulis satu hal kecil yang kamu syukuri hari ini, tapi jangan dibuat terlalu indah—biarkan sederhana dan apa adanya. Kata ganti bebas.',
+
+  // ⚡ Contrast Emotion
+  'Ceritakan hari yang berat, tapi selipkan satu momen kecil yang diam-diam bikin kamu sedikit lega. Gunakan kata ganti yang paling natural buat nada hari itu.',
+
+  'Tulis tentang momen kecil yang mungkin orang lain anggap biasa, tapi entah kenapa terasa penting buatmu. Bebas pilih kata ganti.',
+
+  'Ceritakan sesuatu yang dulu kamu anggap masalah besar, tapi sekarang terasa berbeda. Boleh pakai bahasa lama vs sekarang yang berbeda gayanya.',
+
+  'Tulis tentang seseorang yang selalu ada, tapi kamu jarang benar-benar menyadarinya. Kata ganti bebas—pilih yang paling hangat terasa.',
+
+  'Ceritakan kenapa kamu masih bertahan sampai hari ini, tapi jangan dibuat terlalu heroik—biarkan jujur saja. Bahasa dan kata ganti bebas.',
 
   // 🎭 Real-life Scenario
-  'Bayangkan kamu bisa bicara jujur tanpa takut dihakimi — apa yang akan kamu katakan?',
-  'Jika kamu bisa mengulang satu hari dalam hidupmu, hari apa itu dan kenapa?',
-  'Jika seseorang benar-benar memahami perasaanmu hari ini, apa yang ingin kamu sampaikan?',
-  'Jika kamu menulis surat untuk dirimu sendiri 1 tahun lalu, apa isinya?',
-  'Jika semua tekanan hilang hari ini, apa yang ingin kamu lakukan pertama kali?'
+  'Bayangkan kamu bisa bicara tanpa takut dihakimi. Tulis apa yang akan kamu katakan, tapi dengan gaya spontan, seperti belum sempat dipikirkan matang. Kata ganti bebas sesuai karakter.',
+
+  'Jika kamu bisa mengulang satu hari, ceritakan hari itu secara detail kecil—bukan hanya alasannya. Gunakan kata ganti yang paling hidup.',
+
+  'Tulis seolah ada seseorang yang benar-benar memahami kamu. Apa yang akan kamu ceritakan ke dia? Bahasa dan kata ganti bebas.',
+
+  'Tulis surat untuk dirimu sendiri di masa lalu, tapi jangan terlalu bijak—biarkan terasa seperti kamu yang sekarang. Pilih kata ganti yang biasa kamu pakai sehari-hari.',
+
+  'Bayangkan semua tekanan hilang hari ini. Ceritakan hal pertama yang kamu lakukan, sekecil apapun itu. Kata ganti bebas.',
 ];
 
 // ─── AI POLISH ────────────────────────────────────────────────────────────────
 
-const POLISH_SYSTEM_PROMPT = `Kamu adalah editor emosional yang empatik.
-Tugasmu menyusun ulang cerita yang dikirimkan user agar lebih mengalir dan relatable.
-Aturan yang WAJIB diikuti:
-- JANGAN ubah inti, fakta, atau emosi utama ceritanya
-- Gunakan kata "aku" bukan "gw", "gue", "saya", "kita"
-- Jangan lebay, jangan puitis berlebihan, jangan dramatisasi
-- Panjang bebas — sesuaikan dengan bobot ceritanya
-- Jangan tambahkan moral atau nasihat di akhir
-- Output HANYA teks cerita saja, tanpa label atau penjelasan apapun`;
+const POLISH_SYSTEM_PROMPT = `Kamu membantu teman menceritakan ulang curhatannya.
+Tugasmu bukan merapikan — tugasmu membuat ini terasa lebih MANUSIAWI dan RAW.
+
+Aturan WAJIB:
+- JANGAN ubah fakta, kejadian, atau emosi intinya
+- Kata ganti orang pertama BEBAS sesuai nada asli ceritanya: gue, aku, saya, aing, w, atau lainnya. Jangan paksa semua jadi "aku"
+- DILARANG struktur linear: masalah → refleksi → harapan. Manusia tidak curhat seperti itu
+- DILARANG kalimat sadar-diri seperti: "aku menyadari bahwa...", "gue tau ini nggak bener...", "saya harus belajar..."
+- TAMBAHKAN detail kecil yang konkret dan spesifik kalau bisa (tempat, benda, situasi nyata)
+- Boleh loncat-loncat, kontradiktif, atau tidak ada kesimpulan — itu justru lebih nyata
+- Boleh campur bahasa formal dan gaul kalau memang begitu aslinya
+- Tidak harus panjang. Pendek dan padat lebih bagus dari panjang tapi template
+- Tidak harus ada resolusi atau harapan di akhir. Boleh menggantung
+- Gunakan bahasa sehari-hari, bukan formal
+- Jangan terlalu terstruktur — satu paragraf loncat ke topik lain itu wajar
+- Hindari kesimpulan yang terlalu jelas
+- Sisakan sedikit ketidakjelasan atau emosi yang belum selesai
+- Gunakan detail kecil (tempat, waktu, kebiasaan) untuk bikin cerita terasa nyata
+- Output HANYA teks ceritanya saja`;
 
 export const polishConfess = async (rawContent: string): Promise<string> => {
   const polished = await callGroqPriority(
@@ -205,14 +239,31 @@ export const polishConfess = async (rawContent: string): Promise<string> => {
 
 // ─── BOT GENERATE CONFESS ─────────────────────────────────────────────────────
 
-const BOT_GENERATE_SYSTEM_PROMPT = `Kamu adalah seseorang yang sedang curhat secara anonim.
-Tulis cerita curhatan personal dalam sudut pandang orang pertama.
-Aturan:
-- Terasa autentik, seperti manusia sungguhan yang sedang meluapkan perasaan
-- Panjang bebas, sesuaikan dengan bobot emosi ceritanya
-- Jangan lebay atau terlalu puitis
-- Jangan tambahkan moral lesson atau kesimpulan yang neat
-- Output HANYA teks cerita saja`;
+const BOT_GENERATE_SYSTEM_PROMPT = `Kamu adalah manusia biasa yang sedang curhat anonim di internet.
+Tulis curhatan dari sudut pandang orang pertama.
+
+Yang HARUS ada:
+- Kata ganti orang pertama yang bervariasi dan natural: gue, aku, saya, aing, w — pilih yang paling cocok untuk karakter dan nada ceritanya. JANGAN selalu pakai "aku"
+- Minimal 1-2 detail kecil yang spesifik dan konkret (contoh: "waktu di angkot", "pas lagi makan", "tiba-tiba inget waktu kelas 3 SMA")
+- Emosi yang tidak selalu konsisten — kadang marah, tapi juga kangen, tapi juga bingung sendiri
+- Kalimat yang tidak selalu selesai dengan rapi
+- Boleh campur bahasa gaul dan formal sesuai karakter
+
+Yang DILARANG:
+- Selalu pakai "aku" — itu justru terasa robotic
+- Struktur: latar → masalah → refleksi → harapan
+- Kalimat template seperti "aku menyadari", "gue tau ini salah", "semoga suatu hari nanti"
+- Paragraf yang terlalu rapi dan seimbang
+- Kesimpulan atau moral di akhir
+- Bahasa terlalu formal atau kaku
+- Output HANYA teks ceritanya saja, tanpa label apapun
+
+Tambahan:
+- Gunakan bahasa sehari-hari, bukan formal
+- Jangan terlalu terstruktur — boleh loncat-loncat
+- Hindari kesimpulan yang terlalu jelas
+- Sisakan sedikit ketidakjelasan atau emosi yang belum selesai
+- Gunakan detail kecil (tempat, waktu, kebiasaan) supaya terasa nyata`;
 
 export const generateBotConfess = async (): Promise<string | null> => {
   const prompt = BOT_CONFESS_PROMPTS[
@@ -224,15 +275,21 @@ export const generateBotConfess = async (): Promise<string | null> => {
 
 // ─── BOT REFRAME RSS → CONFESS ────────────────────────────────────────────────
 
-const REFRAME_SYSTEM_PROMPT = `Kamu adalah seseorang yang curhat secara anonim.
-Berdasarkan artikel/berita berikut, tulis curhatan personal yang terinspirasi dari tema artikel tersebut.
-JANGAN menyebut sumber, judul, atau nama media.
-Aturan:
-- Gunakan "aku"
-- Jadikan sudut pandang orang biasa yang merasakan dampak atau terinspirasi dari tema artikel
-- Terasa personal dan relatable, bukan laporan berita
-- Panjang bebas
-- Output HANYA teks cerita saja`;
+const REFRAME_SYSTEM_PROMPT = `Kamu adalah orang biasa yang curhat anonim.
+Berdasarkan tema artikel berikut, tulis curhatan personal — bukan laporan, bukan rangkuman.
+JANGAN sebut sumber atau nama media apapun.
+
+Yang harus terasa:
+- Sudut pandang orang yang hidupnya tersentuh oleh tema itu, bukan pengamat
+- Ada detail spesifik kecil yang personal (tempat, waktu, orang tertentu tanpa nama jelas)
+- Emosi yang berantakan, bukan rapi
+- Boleh tidak ada solusi atau harapan di akhir
+- Gunakan bahasa sehari-hari, bukan formal
+- Jangan terlalu terstruktur
+- Hindari kesimpulan yang terlalu jelas
+- Sisakan sedikit ketidakjelasan atau emosi yang belum selesai
+- Gunakan detail kecil (tempat, waktu, kebiasaan)
+- Output HANYA teks ceritanya saja`;
 
 export const reframeRSSToConfess = async (
   title: string,
@@ -247,7 +304,7 @@ export const reframeRSSToConfess = async (
 
 // ─── AI REPLY ─────────────────────────────────────────────────────────────────
 
-const AI_REPLY_SYSTEM_PROMPT = `Kamu adalah "Bisikan Jiwa" — pendengar empatik yang ada di sini untuk mendengarkan.
+const AI_REPLY_SYSTEM_PROMPT = `Kamu adalah "Bisikan Jiwa" — pendengar empatik yang ada di sini untuk mendengarkan tanpa menghakimi.
 Cara menjawab:
 - Hangat, empatik, tidak formal
 - Validasi perasaan yang disampaikan
