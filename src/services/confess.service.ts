@@ -5,6 +5,7 @@ import axios from 'axios';
 import type { InValue } from '@libsql/client';
 import db from '../db/database';
 import logger from './logger.service';
+import { triggerNewComment } from './pusher.service';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -464,10 +465,13 @@ export const processAIReplyQueue = async (): Promise<void> => {
           ? str((botResult.rows[0] as any).user_id)
           : null;
 
+        const aiCommentId = uuidv4();
+        const aiCreatedAt = new Date().toISOString();
+
         await db.execute({
           sql: `INSERT INTO confess_comments (id, confess_id, user_id, content, is_ai_reply, created_at)
-                VALUES (?, ?, ?, ?, 1, datetime('now'))`,
-          args: [a(uuidv4()), a(str(item.confess_id)), a(botUserId), a(reply)],
+                VALUES (?, ?, ?, ?, 1, ?)`,
+          args: [a(aiCommentId), a(str(item.confess_id)), a(botUserId), a(reply), a(aiCreatedAt)],
         });
 
         await db.execute({
@@ -477,6 +481,20 @@ export const processAIReplyQueue = async (): Promise<void> => {
 
         await _markQueueProcessed(str(item.id));
         logger.info('Confess: AI replied', { confessId: item.confess_id });
+
+        // ✅ Pusher: broadcast balasan Bisikan Jiwa secara real-time (non-blocking)
+        triggerNewComment(str(item.confess_id), {
+          id:          aiCommentId,
+          content:     reply,
+          is_ai_reply: true,
+          created_at:  aiCreatedAt,
+          commenter: {
+            username:     'bisikanjiwa',
+            display_name: 'Bisikan Jiwa',
+            avatar_url:   null,
+            is_ai:        true,
+          },
+        }).catch(() => {});
 
         await randomDelay(2000, 5000);
       } catch (err) {

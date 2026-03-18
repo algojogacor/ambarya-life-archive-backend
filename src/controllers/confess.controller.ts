@@ -13,6 +13,7 @@ import {
   type MoodTag,
 } from '../services/confess.service';
 import logger from '../services/logger.service';
+import { triggerNewComment, triggerRelateUpdated } from '../services/pusher.service';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -247,6 +248,9 @@ export const toggleRelate = async (req: Request, res: Response): Promise<void> =
       args: [a(newCount), a(id)],
     });
 
+    // ✅ Pusher: broadcast relate count update (non-blocking)
+    triggerRelateUpdated(id, { relate_count: newCount }).catch(() => {});
+
     res.json({ related, relate_count: newCount });
   } catch (err) {
     logger.error('toggleRelate failed', { err });
@@ -334,16 +338,21 @@ export const addConfessComment = async (req: Request, res: Response): Promise<vo
     // Masukkan ke antrian AI reply (delay 2-5 menit)
     await enqueueAIReply(id, commentId);
 
+    const commentPayload = {
+      id:          commentId,
+      confess_id:  id,
+      content:     content.trim(),
+      is_ai_reply: false,
+      commenter:   { username: 'anonim', display_name: 'Anonim', avatar_url: null, is_ai: false },
+      created_at:  new Date().toISOString(),
+    };
+
+    // ✅ Pusher: broadcast komentar baru ke semua yang buka thread ini (non-blocking)
+    triggerNewComment(id, commentPayload).catch(() => {});
+
     res.status(201).json({
       message: 'Komentar terkirim',
-      comment: {
-        id:         commentId,
-        confess_id: id,
-        content:    content.trim(),
-        is_ai_reply: false,
-        commenter:  { username: 'anonim', display_name: 'Anonim', avatar_url: null, is_ai: false },
-        created_at: new Date().toISOString(),
-      },
+      comment: commentPayload,
     });
   } catch (err) {
     logger.error('addConfessComment failed', { err });
