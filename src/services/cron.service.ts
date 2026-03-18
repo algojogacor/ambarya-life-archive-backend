@@ -5,6 +5,7 @@ import db from '../db/database';
 import { getDailyReflection } from './ai.service';
 import { cacheSet, cacheDelPattern } from './cache.service';
 import { initBots, runBotPosts, runBotInteractions, runGovernmentBotPost, growBots } from './bot.service';
+import { processAIReplyQueue, runBotConfessPost } from './confess.service';
 import { deleteFromCloudinary } from './cloudinary.service';
 import logger from './logger.service';
 
@@ -33,11 +34,9 @@ const scheduleRandom = (
   }, firstDelay);
 };
 
-// ─── GOVERNMENT BOT: 1x per jam, waktu random ────────────────────────────────
+// ─── GOVERNMENT BOT: 1x per jam ──────────────────────────────────────────────
 
 const startGovernmentBotSchedule = () => {
-  // ✅ Cukup 1 scheduler — jalan tiap ~60 menit dengan jitter ±10 menit
-  // Sehingga posting antara 50-70 menit sekali, tidak spam
   scheduleRandom('Gov Bot Post', 60, 10, runGovernmentBotPost);
   logger.info('Cron: Government bot scheduled (1x/hour, random timing)');
 };
@@ -48,8 +47,7 @@ const deleteOldBotPosts = async (): Promise<void> => {
   logger.info('Cron: Deleting old bot posts...');
 
   try {
-    // Hanya hapus post bot yang sudah > 2 hari
-    // DAN tidak ada komentar atau reaction dari user (non-bot)
+    // Hanya hapus post bot > 2 hari yang tidak ada interaksi dari user
     const oldPosts = await db.execute({
       sql: `SELECT id, media FROM feed_posts
             WHERE is_bot_post = 1
@@ -98,7 +96,7 @@ const deleteOldBotPosts = async (): Promise<void> => {
       );
       const failed = results.filter(r => r.status === 'rejected').length;
       if (failed > 0) logger.warn(`Cron: ${failed} Cloudinary deletions failed (non-fatal)`);
-      logger.info(`Cron: Cloudinary cleanup done (${publicIds.length - failed}/${publicIds.length} deleted)`);
+      logger.info(`Cron: Cloudinary cleanup done (${publicIds.length - failed}/${publicIds.length})`);
     }
 
     // Hapus dari DB secara batch
@@ -109,13 +107,10 @@ const deleteOldBotPosts = async (): Promise<void> => {
       const batch        = postIds.slice(i, i + BATCH);
       const placeholders = batch.map(() => '?').join(',');
 
-      // Hapus komentar (sudah dipastikan tidak ada komentar user di query atas)
       await db.execute({
         sql:  `DELETE FROM comments WHERE post_id IN (${placeholders})`,
         args: batch,
       });
-
-      // Hapus hanya reactions dari bot
       await db.execute({
         sql:  `DELETE FROM reactions
                WHERE post_id IN (${placeholders})
@@ -124,10 +119,7 @@ const deleteOldBotPosts = async (): Promise<void> => {
                  )`,
         args: batch,
       });
-
       // Notifikasi ke user TIDAK dihapus
-
-      // Hapus post
       await db.execute({
         sql:  `DELETE FROM feed_posts WHERE id IN (${placeholders})`,
         args: batch,
@@ -159,17 +151,36 @@ const scheduleAutoDelete = () => {
 };
 
 // ─── INIT ALL CRON JOBS ───────────────────────────────────────────────────────
+//
+// URUTAN PRIORITAS:
+// 1. AI Reply Queue (Bisikan Jiwa) — tertinggi, tiap 1 menit
+// 2. Fixed schedules (analytics, on-this-day, reflection, tokens, year-review)
+// 3. Auto-delete old bot posts
+// 4. Government bot post
+// 5. Regular bot posts & interactions
+// 6. Bot grow
+// 7. Bot confess post (Bisikan Jiwa) — TERAKHIR, sisa resource AI
 
 export const initCronJobs = async () => {
 
   try { await initBots(); } catch (err) { logger.error('Failed to init bots', { err }); }
 
-  // ── Fixed schedules ──────────────────────────────────
+  // ── 1. PRIORITAS TERTINGGI: AI Reply Queue Bisikan Jiwa ───────────────────
+  // Jalan tiap 1 menit — pastikan AI reply tidak terlambat
+  cron.schedule('* * * * *', async () => {
+    try { await processAIReplyQueue(); }
+    catch (err) { logger.error('Cron: AI Reply Queue failed', { err }); }
+  });
+  logger.info('Cron: AI Reply Queue scheduled (every 1 minute)');
 
+  // ── 2. Fixed schedules ────────────────────────────────────────────────────
+
+  // Reset analytics cache tiap tengah malam
   cron.schedule('1 0 * * *', async () => {
     await cacheDelPattern('analytics:*');
   }, { timezone: 'Asia/Jakarta' });
 
+  // On This Day — tiap pagi jam 7
   cron.schedule('0 7 * * *', async () => {
     const today = new Date();
     const mmdd  = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -196,6 +207,7 @@ export const initCronJobs = async () => {
     }
   }, { timezone: 'Asia/Jakarta' });
 
+  // Daily Reflection — tiap malam jam 9
   cron.schedule('0 21 * * *', async () => {
     const today = new Date().toISOString().split('T')[0];
     const users = await db.execute({
@@ -220,6 +232,7 @@ export const initCronJobs = async () => {
     }
   }, { timezone: 'Asia/Jakarta' });
 
+  // Cleanup refresh tokens — tiap minggu
   cron.schedule('0 2 * * 0', async () => {
     await db.execute({
       sql:  `DELETE FROM refresh_tokens WHERE expires_at < datetime('now') OR revoked = 1`,
@@ -227,6 +240,7 @@ export const initCronJobs = async () => {
     });
   }, { timezone: 'Asia/Jakarta' });
 
+  // Year Review — 1 Januari tiap tahun
   cron.schedule('30 0 1 1 *', async () => {
     const lastYear = new Date().getFullYear() - 1;
     const users    = await db.execute({
@@ -274,13 +288,26 @@ export const initCronJobs = async () => {
     }
   }, { timezone: 'Asia/Jakarta' });
 
-  // ── Random schedules ──────────────────────────────────
-
+  // ── 3. Auto-delete old bot posts ──────────────────────────────────────────
   scheduleAutoDelete();
+
+  // ── 4. Government bot post (1x/jam) ──────────────────────────────────────
+  startGovernmentBotSchedule();
+
+  // ── 5. Regular bot posts & interactions ──────────────────────────────────
   scheduleRandom('Bot Posts',        90,  30, runBotPosts);
   scheduleRandom('Bot Interactions', 45,  15, runBotInteractions);
+
+  // ── 6. Bot grow ───────────────────────────────────────────────────────────
   scheduleRandom('Bot Grow',        360,  60, growBots);
-  startGovernmentBotSchedule();
+
+  // ── 7. PRIORITAS TERAKHIR: Bot Confess Post (Bisikan Jiwa) ───────────────
+  // Dijalankan PALING AKHIR agar tidak rebutan resource AI dengan reply queue
+  // Interval 30-45 menit, delay awal 5 menit setelah server start
+  setTimeout(() => {
+    scheduleRandom('Bot Confess Post', 37, 7, runBotConfessPost);
+    logger.info('Cron: Bot Confess Post scheduled (every ~37 min, lowest priority)');
+  }, 5 * 60 * 1000); // delay 5 menit setelah startup
 
   logger.info('✅ All cron jobs initialized');
 };

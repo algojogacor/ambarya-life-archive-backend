@@ -106,19 +106,23 @@ const BOT_TEMPLATES = [
     bio: '💚 Hidup Persebaya! | Berita, hasil, dan update terkini Persebaya Surabaya 🐊 | Bajul Ijo Forever',
     topics: ['persebaya'], postMin: 4, postMax: 8, interactMin: 6, interactMax: 16,
   },
-
-  // ✅ Bot khusus berita Surabaya
   {
     name: 'Warta Surabaya', username: 'wartasurabaya', avatar: null,
     bio: '🏙️ Berita terkini seputar Surabaya & Jawa Timur | Untuk warga Surabaya, dari Surabaya',
     topics: ['surabaya'], postMin: 4, postMax: 8, interactMin: 5, interactMax: 14,
   },
-
-  // Government bot
   {
     name: 'Info Pemerintah RI', username: 'infopemerintahri', avatar: null,
     bio: '🇮🇩 Informasi resmi kebijakan dan program pemerintah Indonesia | Akun Informasi Publik',
     topics: ['government', 'news'], postMin: 1, postMax: 1, interactMin: 2, interactMax: 5,
+  },
+
+  // ✅ Bot Bisikan Jiwa — akun khusus confess, BUKAN bot postingan biasa
+  // Tidak masuk ke loop runBotPosts, hanya dipakai oleh confess.service
+  {
+    name: 'Bisikan Jiwa', username: 'bisikanjiwa', avatar: null,
+    bio: '🤍 Mendengarkan tanpa menghakimi | Tempat bercerita yang aman',
+    topics: [], postMin: 0, postMax: 0, interactMin: 0, interactMax: 0,
   },
 ];
 
@@ -173,7 +177,7 @@ const isPostedBefore = async (sourceUrl: string | null): Promise<boolean> => {
 };
 
 const isContentPostedBefore = async (content: string): Promise<boolean> => {
-  const hash = simpleHash(content);
+  const hash   = simpleHash(content);
   const result = await db.execute({
     sql: `SELECT id FROM feed_posts
           WHERE is_bot_post = 1
@@ -299,7 +303,7 @@ export const growBots = async (): Promise<void> => {
   }
 };
 
-// ─── GOVERNMENT BOT POST (1x per jam) ────────────────────────────────────────
+// ─── GOVERNMENT BOT POST ──────────────────────────────────────────────────────
 
 export const runGovernmentBotPost = async (): Promise<void> => {
   const govBot = await db.execute({
@@ -344,10 +348,11 @@ export const runGovernmentBotPost = async (): Promise<void> => {
     args: [a(postId), a(str(bot.user_id)), a(content.content), a(mediaJson), a(content.sourceUrl || null), a(content.sourceName || null), a(now)]
   });
 
-  logger.info('Gov Bot: Posted', { postId, hasImage: !!content.imageUrl });
+  logger.info('Gov Bot: Posted', { postId });
 };
 
 // ─── BOT POST (regular) ───────────────────────────────────────────────────────
+// ✅ @bisikanjiwa dikecualikan — tidak ikut loop posting biasa
 
 export const runBotPosts = async (): Promise<void> => {
   logger.info('Bot: Running bot posts...');
@@ -355,7 +360,9 @@ export const runBotPosts = async (): Promise<void> => {
   const bots = await db.execute({
     sql: `SELECT b.*, sp.user_id FROM bots b
           JOIN social_profiles sp ON sp.user_id = b.user_id
-          WHERE b.is_active = 1 AND sp.username != 'infopemerintahri'`,
+          WHERE b.is_active = 1
+            AND sp.username != 'infopemerintahri'
+            AND sp.username != 'bisikanjiwa'`,
     args: []
   });
 
@@ -437,7 +444,7 @@ export const runBotInteractions = async (): Promise<void> => {
   const bots = await db.execute({
     sql: `SELECT b.*, sp.user_id FROM bots b
           JOIN social_profiles sp ON sp.user_id = b.user_id
-          WHERE b.is_active = 1`,
+          WHERE b.is_active = 1 AND sp.username != 'bisikanjiwa'`,
     args: []
   });
 

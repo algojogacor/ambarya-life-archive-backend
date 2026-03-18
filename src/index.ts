@@ -9,6 +9,7 @@ import waRoutes from './routes/wa.routes';
 import socialRoutes from './routes/social.routes';
 import servicesRoutes from './routes/services.routes';
 import { initCronJobs } from './services/cron.service';
+import confessRoutes from './routes/confess.routes';
 import { runMigrations } from './db/migrate';
 import logger from './services/logger.service';
 
@@ -44,6 +45,7 @@ app.get('/api/app/version', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/entries', entryRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/confess', confessRoutes);
 app.use('/api', extraRoutes);
 app.use('/api', waRoutes);
 app.use('/api', servicesRoutes);
